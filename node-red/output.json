@@ -1,0 +1,88 @@
+[
+    {
+        "id": "361adbf843c6c36c",
+        "type": "tab",
+        "label": "Fluxo 2",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "eaaab43fe4e498cb",
+        "type": "inject",
+        "z": "361adbf843c6c36c",
+        "name": "",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "ac-iot/sala01/comando",
+        "payload": "{\"comando\":\"rele\",\"acao\":\"OFF\"}",
+        "payloadType": "json",
+        "x": 110,
+        "y": 140,
+        "wires": [
+            [
+                "c6506a9d23fcba09"
+            ]
+        ]
+    },
+    {
+        "id": "c6506a9d23fcba09",
+        "type": "mqtt out",
+        "z": "361adbf843c6c36c",
+        "name": "",
+        "topic": "ac-iot/sala01/comando",
+        "qos": "",
+        "retain": "",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "4cc86d0224581af7",
+        "x": 180,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "4cc86d0224581af7",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "ac_iot_mosquitto",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]

@@ -1,0 +1,41 @@
+services:
+  # ──────────────────────────────────────────────
+  # Broker MQTT – Eclipse Mosquitto 2.x
+  # ──────────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: ac_iot_mosquitto
+    ports:
+      - "1883:1883"   # MQTT padrão
+      - "9001:9001"   # WebSockets (usado pelo Node-RED Dashboard)
+    volumes:
+      - ./docker/mosquitto/config:/mosquitto/config:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mosquitto_sub -t '$$SYS/#' -C 1 -i healthcheck -W 3 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ──────────────────────────────────────────────
+  # Middleware / Dashboard – Node-RED
+  # ──────────────────────────────────────────────
+  nodered:
+    image: nodered/node-red:latest
+    container_name: ac_iot_nodered
+    ports:
+      - "1880:1880"
+    environment:
+      - TZ=America/Sao_Paulo
+    volumes:
+      - ./docker/nodered/data:/data
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:

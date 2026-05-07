@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "author": "ac-iot-ufma",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-dht22",
+      "id": "dht",
+      "top": -80,
+      "left": 120,
+      "attrs": { "temperature": "25", "humidity": "60" }
+    },
+    {
+      "type": "wokwi-pir-motion-sensor",
+      "id": "pir",
+      "top": -80,
+      "left": 250,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-led",
+      "id": "irled",
+      "top": 100,
+      "left": 250,
+      "attrs": { "color": "red" }
+    }
+  ],
+  "connections": [
+    ["esp:D4",  "dht:SDA",  "green",  []],
+    ["esp:3V3", "dht:VCC",  "red",    []],
+    ["esp:GND.1","dht:GND", "black",  []],
+    ["esp:D15", "pir:OUT",  "blue",   []],
+    ["esp:3V3", "pir:VCC",  "red",    []],
+    ["esp:GND.2","pir:GND", "black",  []],
+    ["esp:D26", "irled:A",  "orange", []],
+    ["esp:GND.3","irled:C", "black",  []]
+  ]
+}
