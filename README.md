@@ -89,39 +89,45 @@ ac-iot-ufma/
 
 ## 🚀 Como Executar o Projeto
 
+Certifique-se de ter o **Docker Desktop** instalado e rodando em sua máquina antes de começar.
+
 ### 1. Clonar o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/ac-iot-ufma.git
+git clone https://github.com/TonyMPCastro/ac-iot-ufma.git
 cd ac-iot-ufma
 ```
 
 ### 2. Iniciar a infraestrutura Docker
 
+Escolha o terminal de acordo com seu sistema operacional:
+
+#### 🪟 Windows
+Use o **PowerShell** ou o **Windows Terminal**:
+```powershell
+docker-compose up -d --build
+```
+
+#### 🍎 macOS
+Use o **Terminal** nativo ou **iTerm2**:
 ```bash
-docker compose up -d
+docker-compose up -d --build
 ```
 
-Isso levanta os containers:
-- **ac_iot_mosquitto** — Broker MQTT na porta `1883` (e WebSocket na `9001`)
-- **ac_iot_nodered** — Node-RED na porta `1880`
-- **ac_iot_simulador** — Simulador Python de 5 salas (cliente conectado internamente ao Mosquitto)
+---
 
-### 3. Verificar se os containers estão saudáveis
+### 3. Verificar o status dos serviços
+
+Após rodar o comando acima, verifique se todos os containers estão ativos e se o Mosquitto está com status `healthy`:
 
 ```bash
-docker compose ps
+docker-compose ps
 ```
 
-Você deve ver os serviços com status `Up` (e o Mosquitto como `healthy`).
+### 4. Acessar as Interfaces
 
-### 4. Acessar o Node-RED Dashboard
-
-Abra no navegador:
-
-```
-http://localhost:1880
-```
+*   **Painel de Controle Web:** Abra o arquivo `simulador-web/index.html` diretamente no seu navegador preferido (Chrome, Edge ou Safari).
+*   **Node-RED (Fluxos):** Acesse [http://localhost:1880](http://localhost:1880) para gerenciar as automações.
 
 ---
 
