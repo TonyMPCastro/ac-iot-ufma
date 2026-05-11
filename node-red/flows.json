@@ -1,0 +1,263 @@
+[
+    {
+        "id": "fluxo_5_salas",
+        "type": "tab",
+        "label": "Automação - 5 Salas",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "tab_simulacao",
+        "type": "tab",
+        "label": "Controle AC - Simulação",
+        "disabled": false,
+        "info": "Fluxos para envio de comandos MQTT e recebimento de telemetria."
+    },
+    {
+        "id": "tab_global",
+        "type": "tab",
+        "label": "Controle Global",
+        "disabled": false,
+        "info": "Comandos para todas as salas simultaneamente."
+    },
+    {
+        "id": "mqtt_broker_docker",
+        "type": "mqtt-broker",
+        "name": "Mosquitto Docker",
+        "broker": "mosquitto",
+        "port": "1883",
+        "clientid": "nodered_client",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "mqtt_in_sensores_auto",
+        "type": "mqtt in",
+        "z": "fluxo_5_salas",
+        "name": "Receber Sensores (Auto)",
+        "topic": "ac-iot/+/sensores",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "mqtt_broker_docker",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 160,
+        "y": 140,
+        "wires": [
+            [
+                "function_automacao",
+                "debug_telemetria"
+            ]
+        ]
+    },
+    {
+        "id": "function_automacao",
+        "type": "function",
+        "z": "fluxo_5_salas",
+        "name": "Lógica de Automação",
+        "func": "// Extração segura do ID da sala\nvar id_sala = msg.payload.id_sala;\nvar temp = msg.payload.temperatura || 0;\n\nif (!id_sala && msg.topic) {\n    var partes = msg.topic.split('/');\n    if (partes.length >= 2) id_sala = partes[1];\n}\n\nif (!id_sala) return null;\n\n// Histerese: Ligar > 24, Desligar < 22\nvar ac_cmd = \"\";\nif (temp > 24) ac_cmd = \"ligar\";\nelse if (temp < 22) ac_cmd = \"desligar\";\n\nif (ac_cmd === \"\") return null; \n\nreturn {\n    topic: \"ac-iot/\" + id_sala + \"/comando\",\n    payload: { \"comando\": ac_cmd }\n};",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 140,
+        "wires": [
+            [
+                "mqtt_out_comandos"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt_out_comandos",
+        "type": "mqtt out",
+        "z": "fluxo_5_salas",
+        "name": "Enviar Comandos",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt_broker_docker",
+        "x": 750,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "debug_telemetria",
+        "type": "debug",
+        "z": "fluxo_5_salas",
+        "name": "Debug Sensores",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 470,
+        "y": 80,
+        "wires": []
+    },
+    {
+        "id": "inject_global_on_ac",
+        "type": "inject",
+        "z": "tab_global",
+        "name": "Ligar TODOS os ACs",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "ac-iot/all/comando",
+        "payload": "{\"comando\": \"ligar\"}",
+        "payloadType": "json",
+        "x": 180,
+        "y": 100,
+        "wires": [
+            [
+                "mqtt_out_global"
+            ]
+        ]
+    },
+    {
+        "id": "inject_global_off_ac",
+        "type": "inject",
+        "z": "tab_global",
+        "name": "Desligar TODOS os ACs",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "ac-iot/all/comando",
+        "payload": "{\"comando\": \"desligar\"}",
+        "payloadType": "json",
+        "x": 190,
+        "y": 160,
+        "wires": [
+            [
+                "mqtt_out_global"
+            ]
+        ]
+    },
+    {
+        "id": "inject_global_on_luz",
+        "type": "inject",
+        "z": "tab_global",
+        "name": "Ligar TODAS as Luzes",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "ac-iot/all/comando",
+        "payload": "{\"luz\": \"ligar\"}",
+        "payloadType": "json",
+        "x": 180,
+        "y": 260,
+        "wires": [
+            [
+                "mqtt_out_global"
+            ]
+        ]
+    },
+    {
+        "id": "inject_global_off_luz",
+        "type": "inject",
+        "z": "tab_global",
+        "name": "Desligar TODAS as Luzes",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "ac-iot/all/comando",
+        "payload": "{\"luz\": \"desligar\"}",
+        "payloadType": "json",
+        "x": 200,
+        "y": 320,
+        "wires": [
+            [
+                "mqtt_out_global"
+            ]
+        ]
+    },
+    {
+        "id": "mqtt_out_global",
+        "type": "mqtt out",
+        "z": "tab_global",
+        "name": "Publicar Global",
+        "topic": "",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "mqtt_broker_docker",
+        "x": 520,
+        "y": 200,
+        "wires": []
+    }
+]

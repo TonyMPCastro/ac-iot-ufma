@@ -13,16 +13,22 @@ Projeto acadêmico desenvolvido na **UFMA** (Universidade Federal do Maranhão) 
 │   ESP32      │ ──────────────────► │  Mosquitto       │                   │  InterSCity │
 │  (Sensores   │     porta 1883      │  (Broker MQTT)   │                   │  (API REST) │
 │   + IR LED)  │ ◄────────────────── │                  │                   │             │
-└──────────────┘    Comandos IR      └────────┬─────────┘                   └──────▲──────┘
-                                              │                                    │
-                                              │ MQTT                               │ HTTP
-                                              ▼                                    │
-                                     ┌──────────────────┐                          │
-                                     │   Node-RED        │──────────────────────────┘
-                                     │  (Motor de Regras │
-                                     │   + Dashboard)    │
-                                     │   porta 1880      │
-                                     └──────────────────┘
+└──────┬───────┘    Comandos IR      └────────┬─────────┘                   └──────▲──────┘
+       │                                      │                                    │
+       │                                      │ MQTT                               │ HTTP
+       │                                      ▼                                    │
+       │                             ┌──────────────────┐                          │
+       │                             │   Node-RED        │─────────────────────────┘
+       │                             │  (Motor de Regras │
+       │                             │   + Dashboard)    │
+       │                             │   porta 1880      │
+       │                             └──────────────────┘
+       │
+       ▼ WebSockets (porta 9001)
+┌───────────────────────────┐
+│ Plataforma de Simulação   │
+│ (Painel Web e Python)     │
+└───────────────────────────┘
 ```
 
 ### Componentes
@@ -30,6 +36,8 @@ Projeto acadêmico desenvolvido na **UFMA** (Universidade Federal do Maranhão) 
 | Componente | Tecnologia | Execução |
 |---|---|---|
 | **Sensores + Atuador** | ESP32 + DHT22 + PIR + IR LED | Firmware local (PlatformIO / Wokwi) |
+| **Simulador (Backend)** | Python | Docker |
+| **Simulador (Frontend)** | HTML + CSS + JS (Paho MQTT) | Navegador Web |
 | **Broker MQTT** | Eclipse Mosquitto 2.x | Docker |
 | **Middleware / Dashboard** | Node-RED + node-red-dashboard | Docker |
 | **Plataforma IoT** | InterSCity | API externa |
@@ -47,6 +55,9 @@ ac-iot-ufma/
 │   │       └── mosquitto.conf  # Configuração do broker MQTT
 │   └── nodered/
 │       └── data/               # Volume persistente (flows.json)
+├── simulador/                  # Script Python que simula 5 salas e envia MQTT
+├── simulador-web/              # Interface Web para simulação manual via WebSockets
+│   └── index.html
 ├── firmware/
 │   └── esp32/
 │       ├── src/
@@ -74,22 +85,6 @@ ac-iot-ufma/
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac/Linux)
 - [Git](https://git-scm.com/)
 
-### Para desenvolvimento do Firmware (opcional na etapa inicial)
-
-- [VS Code](https://code.visualstudio.com/)
-- Extensão [PlatformIO IDE](https://platformio.org/install/ide?install=vscode)
-- Extensão [Wokwi Simulator](https://marketplace.visualstudio.com/items?itemName=Wokwi.wokwi-vscode)
-
-### Versões testadas
-
-| Ferramenta | Versão |
-|---|---|
-| Docker Compose | v2.x+ |
-| Mosquitto | 2.0.x |
-| Node-RED | 4.x |
-| PlatformIO Core | 6.x |
-| ESP32 Arduino | 2.x |
-
 ---
 
 ## 🚀 Como Executar o Projeto
@@ -107,9 +102,10 @@ cd ac-iot-ufma
 docker compose up -d
 ```
 
-Isso levanta dois containers:
+Isso levanta os containers:
 - **ac_iot_mosquitto** — Broker MQTT na porta `1883` (e WebSocket na `9001`)
 - **ac_iot_nodered** — Node-RED na porta `1880`
+- **ac_iot_simulador** — Simulador Python de 5 salas (cliente conectado internamente ao Mosquitto)
 
 ### 3. Verificar se os containers estão saudáveis
 
@@ -117,7 +113,7 @@ Isso levanta dois containers:
 docker compose ps
 ```
 
-Você deve ver ambos os serviços com status `Up` (e o Mosquitto como `healthy`).
+Você deve ver os serviços com status `Up` (e o Mosquitto como `healthy`).
 
 ### 4. Acessar o Node-RED Dashboard
 
@@ -127,58 +123,69 @@ Abra no navegador:
 http://localhost:1880
 ```
 
-### 5. Instalar `node-red-dashboard` (primeira vez)
-
-1. No editor Node-RED, clique no menu **☰** (canto superior direito).
-2. Selecione **Manage Palette**.
-3. Na aba **Install**, pesquise por `node-red-dashboard`.
-4. Clique em **Install**.
-
-O dashboard ficará acessível em: `http://localhost:1880/ui`
-
 ---
 
-## 🧪 Teste Rápido — Validar a Stack
+## 🎮 Plataforma de Simulação
 
-### Teste via terminal (publicar mensagem MQTT)
+O projeto agora conta com uma plataforma completa de simulação para testar a comunicação MQTT sem depender de hardware físico real:
 
-Abra **dois terminais**.
+### 1. Simulador Automático (Python)
 
-**Terminal 1** — Inscrever-se para receber mensagens:
+Por padrão, ao rodar `docker compose up -d`, o contêiner `simulador` começa a rodar e envia leituras aleatórias para 5 salas diferentes a cada 5 segundos nos tópicos `telemetria/esp32/salaXX`.
 
-```bash
-docker exec ac_iot_mosquitto mosquitto_sub -h localhost -t "ac-iot/#" -v
-```
-
-**Terminal 2** — Publicar uma mensagem de teste:
+Para ver os logs do simulador e as mensagens que estão sendo geradas, você pode rodar:
 
 ```bash
-docker exec ac_iot_mosquitto mosquitto_pub -h localhost -t "ac-iot/teste" -m "{\"temperatura\":25.5,\"presenca\":true}"
+docker compose logs -f simulador
 ```
 
-**Resultado esperado no Terminal 1:**
+### 2. Painel Web de Simulação Manual
 
+Além do simulador automático, você pode utilizar um **Painel Web Visual** para acompanhar os dados em tempo real e intervir manualmente enviando novos valores.
+
+**Como acessar o Painel Web:**
+1. Navegue até a pasta `simulador-web` no seu explorador de arquivos.
+2. Abra o arquivo **`index.html`** no seu navegador padrão (Chrome, Firefox, Edge, etc.).
+3. O painel se conectará automaticamente ao broker Mosquitto via WebSockets (Porta 9001).
+
+No painel, você verá as leituras sendo atualizadas e poderá usar os sliders para alterar os valores de Temperatura, Umidade e Luminosidade. Após ajustar, clique em **"Publicar Simulação Manual"** e a nova leitura será enviada ao broker MQTT!
+
+**Alternando para o modo "Apenas Manual":**
+Se você quiser desligar as atualizações automáticas do Python (para que as leituras não fiquem mudando sozinhas de 5 em 5 segundos), pare o contêiner do simulador:
+
+```cmd
+cmd /c docker compose stop simulador
 ```
-ac-iot/teste {"temperatura":25.5,"presenca":true}
-```
 
-✅ Se a mensagem apareceu, o broker MQTT está funcionando perfeitamente!
+Para reativar a simulação automática:
 
-### Teste via script automatizado (Windows)
-
-```bash
-tests\test_mqtt_pub.bat
+```cmd
+cmd /c docker compose start simulador
 ```
 
 ---
 
-## 📊 Tópicos MQTT
+## 🧪 Tópicos MQTT do Simulador
 
 | Tópico | Direção | Descrição |
 |---|---|---|
-| `ac-iot/sala01/sensores` | ESP32 → Node-RED | Dados de temperatura, umidade e presença |
-| `ac-iot/sala01/comando` | Node-RED → ESP32 | Comandos para ligar/desligar AC |
-| `ac-iot/sala01/status` | ESP32 → Node-RED | Status de conexão do dispositivo |
+| `telemetria/esp32/sala01` | Simulador → Broker | Dados gerados da Sala 01 |
+| `telemetria/esp32/sala02` | Simulador → Broker | Dados gerados da Sala 02 |
+| `telemetria/esp32/sala03` | Simulador → Broker | Dados gerados da Sala 03 |
+| `telemetria/esp32/sala04` | Simulador → Broker | Dados gerados da Sala 04 |
+| `telemetria/esp32/sala05` | Simulador → Broker | Dados gerados da Sala 05 |
+
+*Formato do Payload (JSON):*
+```json
+{
+  "id_sala": "sala01",
+  "status_ac": "ligado",
+  "temperatura": 25.5,
+  "umidade": 60.0,
+  "luminosidade": 500,
+  "timestamp": 1642903200
+}
+```
 
 ---
 
@@ -196,36 +203,16 @@ docker compose down -v
 
 ---
 
-## 🔧 Desenvolvimento do Firmware
-
-O firmware do ESP32 está em `firmware/esp32/` e é desenvolvido localmente com **PlatformIO**.
-
-### Compilar
-
-```bash
-cd firmware/esp32
-pio run
-```
-
-### Simular com Wokwi
-
-1. Abra a pasta `firmware/esp32/` no VS Code.
-2. Pressione `Ctrl+Shift+P` → **Wokwi: Start Simulator**.
-3. O ESP32 virtual se conectará ao broker MQTT local.
-
-> **Nota:** Para o simulador Wokwi acessar o Docker, o broker deve estar acessível em `host.docker.internal` ou `localhost`.
-
----
-
 ## 📝 Roadmap
 
 - [x] **Etapa 01** — Preparação do Ambiente
 - [x] **Etapa 02** — Estruturação do Repositório
-- [ ] **Etapa 03** — Firmware ESP32 (sensores + MQTT)
-- [ ] **Etapa 04** — Fluxos Node-RED (regras de automação)
-- [ ] **Etapa 05** — Dashboard de monitoramento
-- [ ] **Etapa 06** — Integração InterSCity
-- [ ] **Etapa 07** — Testes end-to-end e documentação final
+- [x] **Etapa 03** — Plataforma de Simulação (Python e Web UI)
+- [ ] **Etapa 04** — Firmware ESP32 (sensores + MQTT)
+- [ ] **Etapa 05** — Fluxos Node-RED (regras de automação)
+- [ ] **Etapa 06** — Dashboard de monitoramento
+- [ ] **Etapa 07** — Integração InterSCity
+- [ ] **Etapa 08** — Testes end-to-end e documentação final
 
 ---
 
