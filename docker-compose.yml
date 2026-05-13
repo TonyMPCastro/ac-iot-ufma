@@ -6,15 +6,15 @@ services:
     image: eclipse-mosquitto:latest
     container_name: ac_iot_mosquitto
     ports:
-      - "1883:1883"   # MQTT padrão
-      - "9001:9001"   # WebSockets (usado pelo Node-RED Dashboard)
+      - "1883:1883" # MQTT padrão
+      - "9001:9001" # WebSockets (usado pelo Node-RED Dashboard)
     volumes:
       - ./docker/mosquitto/config:/mosquitto/config:ro
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "timeout 2s mosquitto_sub -t 'test' -C 1 -E -i healthcheck || exit 1"]
+      test: [ "CMD-SHELL", "timeout 2s mosquitto_sub -t 'test' -C 1 -E -i healthcheck || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -51,22 +51,21 @@ services:
       mosquitto:
         condition: service_healthy
     restart: unless-stopped
-
   # ──────────────────────────────────────────────
   # InterSCity Local Bridge
   # ──────────────────────────────────────────────
-  interscity:
-    build:
-      context: ./interscity
-    container_name: ac_iot_interscity
-    ports:
-      - "5000:5000"
-    env_file:
-      - ./interscity/.env
-    depends_on:
-      mosquitto:
-        condition: service_healthy
-    restart: unless-stopped
+  # interscity:
+  #   build:
+  #     context: ./interscity
+  #   container_name: ac_iot_interscity
+  #   ports:
+  #     - "5000:5000"
+  #   env_file:
+  #     - ./interscity/.env
+  #   depends_on:
+  #     mosquitto:
+  #       condition: service_healthy
+  #   restart: unless-stopped
 
 volumes:
   mosquitto_data:
