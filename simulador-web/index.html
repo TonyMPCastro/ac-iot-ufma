@@ -283,19 +283,77 @@
         <span id="statusText">Conectando ao Broker...</span>
     </div>
 
-    <div class="global-controls" style="width:100%; max-width:1100px; background:var(--card); padding:20px; border-radius:16px; border:1px solid var(--border); margin-bottom:24px; display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-        <div class="global-group">
-            <div class="section-title">❄️ Ar Condicionados (Geral)</div>
-            <div class="button-group">
-                <button class="btn btn-apply" onclick="enviarComandoGlobal('comando', 'ligar')">Ligar Todos</button>
-                <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal('comando', 'desligar')">Desligar Todos</button>
+    <div class="global-controls" style="width:100%; max-width:1100px; background:var(--card); padding:20px; border-radius:16px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-direction:column; gap:20px;">
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+            <div class="global-group">
+                <div class="section-title">🛡️ Modo da Sala</div>
+                <div class="button-group">
+                    <button class="btn btn-apply" onclick="enviarComandoGlobalExt({modo_ac: 'ativo'})">Ativar Todas</button>
+                    <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobalExt({modo_ac: 'desativado', comando: 'desligar'})">Desativar Todas</button>
+                </div>
+            </div>
+            <div class="global-group">
+                <div class="section-title">❄️ Ar Condicionado</div>
+                <div class="button-group">
+                    <button class="btn btn-apply" onclick="enviarComandoGlobal('comando', 'ligar')">Ligar Todos</button>
+                    <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal('comando', 'desligar')">Desligar Todos</button>
+                </div>
+            </div>
+            <div class="global-group">
+                <div class="section-title">💡 Iluminação</div>
+                <div class="button-group">
+                    <button class="btn active-luz" onclick="enviarComandoGlobal('luz', 'ligar')">Ligar Todas</button>
+                    <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal('luz', 'desligar')">Desligar Todas</button>
+                </div>
             </div>
         </div>
-        <div class="global-group">
-            <div class="section-title">💡 Iluminação (Geral)</div>
-            <div class="button-group">
-                <button class="btn active-luz" onclick="enviarComandoGlobal('luz', 'ligar')">Ligar Todas</button>
-                <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal('luz', 'desligar')">Desligar Todas</button>
+
+        <div style="border-top:1px solid var(--border); padding-top:16px;">
+            <div class="section-title" style="margin-bottom:10px;">🌡️ Setpoint AC (Global)</div>
+            <div style="display:flex; align-items:center; gap:16px;">
+                <div class="control-label">Setpoint: <b id="lbl_global_set">22</b>°C</div>
+                <input type="range" min="16" max="30" value="22" step="1" style="flex:1;"
+                    oninput="updateLabel('lbl_global_set', this.value)"
+                    onchange="enviarComandoGlobal('setpoint', parseFloat(this.value))">
+            </div>
+        </div>
+
+        <div style="border-top:1px solid var(--border); padding-top:16px;">
+            <div class="section-title" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+                <span>🌍 Simulação Rápida (Sensores)</span>
+                <select id="sim_target" style="padding:6px; border-radius:6px; background:#0f172a; color:var(--text); border:1px solid var(--border); font-size:0.85rem; font-weight:600;">
+                    <option value="all">Todas as Salas</option>
+                    <option value="sala01">Sala 01</option>
+                    <option value="sala02">Sala 02</option>
+                    <option value="sala03">Sala 03</option>
+                </select>
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
+                <div class="control-row">
+                    <div class="control-label">Temperatura: <b id="lbl_global_temp">25</b>°C</div>
+                    <input type="range" min="10" max="45" value="25" step="0.5" 
+                        oninput="updateLabel('lbl_global_temp', this.value)"
+                        onchange="enviarComandoSimulador('temperatura', parseFloat(this.value))">
+                </div>
+                <div class="control-row">
+                    <div class="control-label">Umidade: <b id="lbl_global_umi">50</b>%</div>
+                    <input type="range" min="0" max="100" value="50" step="1" 
+                        oninput="updateLabel('lbl_global_umi', this.value)"
+                        onchange="enviarComandoSimulador('umidade', parseFloat(this.value))">
+                </div>
+                <div class="control-row">
+                    <div class="control-label">Luz (lux): <b id="lbl_global_lux">500</b></div>
+                    <input type="range" min="0" max="1500" value="500" step="10" 
+                        oninput="updateLabel('lbl_global_lux', this.value)"
+                        onchange="enviarComandoSimulador('luminosidade', parseInt(this.value))">
+                </div>
+                <div class="control-row" style="display:flex; align-items:center; padding-top:10px;">
+                    <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; font-weight:500; cursor:pointer;">
+                        <input type="checkbox" style="width:18px; height:18px; accent-color:var(--primary);" onchange="enviarComandoSimulador('presenca', this.checked)">
+                        Forçar Presença
+                    </label>
+                </div>
             </div>
         </div>
     </div>
@@ -337,7 +395,7 @@
                         <span class="sala-name">${id.toUpperCase()}</span>
                         <span class="sala-time" id="time_${id}">--:--:--</span>
                     </div>
-                    <div id="badge_${id}" class="status-badge" style="background:var(--danger); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:700; transition:all 0.3s;">DESLIGADO</div>
+                    <div id="badge_${id}" class="status-badge" style="background:var(--primary); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:700; transition:all 0.3s;">ATIVO</div>
                 </div>
 
                 <div class="monitor-section">
@@ -360,6 +418,10 @@
                             <span id="stat_luz_${id}" style="font-weight:700;">--</span>
                         </div>
                         <div class="monitor-item">
+                            <label>Presença</label>
+                            <span id="pres_${id}">--</span>
+                        </div>
+                        <div class="monitor-item">
                             <label>Ar Condicionado</label>
                             <span id="stat_${id}" style="font-weight:700;">--</span>
                         </div>
@@ -373,9 +435,40 @@
                             <div class="control-label">Setpoint AC: <b id="lbl_set_${id}">22</b>°C</div>
                             <input type="range" id="set_${id}" min="16" max="30" value="22" step="1" 
                                 oninput="updateLabel('lbl_set_${id}', this.value)"
-                                onchange="enviarComandoIndividual('${id}', 'setpoint', this.value)">
+                                onchange="enviarComandoIndividual('${id}', 'setpoint', parseFloat(this.value))">
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-label">Temp. Sala (Sensor): <b id="lbl_sim_temp_${id}">25</b>°C</div>
+                            <input type="range" id="sim_temp_${id}" min="10" max="45" value="25" step="0.5" 
+                                oninput="updateLabel('lbl_sim_temp_${id}', this.value)"
+                                onchange="enviarComandoIndividual('${id}', 'temperatura', parseFloat(this.value))">
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-label">Umidade (Sensor): <b id="lbl_sim_umi_${id}">50</b>%</div>
+                            <input type="range" id="sim_umi_${id}" min="0" max="100" value="50" step="1" 
+                                oninput="updateLabel('lbl_sim_umi_${id}', this.value)"
+                                onchange="enviarComandoIndividual('${id}', 'umidade', parseFloat(this.value))">
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-label">Luminosidade (Sensor): <b id="lbl_sim_lux_${id}">500</b> lx</div>
+                            <input type="range" id="sim_lux_${id}" min="0" max="1500" value="500" step="10" 
+                                oninput="updateLabel('lbl_sim_lux_${id}', this.value)"
+                                onchange="enviarComandoIndividual('${id}', 'luminosidade', parseInt(this.value))">
+                        </div>
+
+                        <div class="control-row">
+                            <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; font-weight:500; cursor:pointer; margin-top:4px;">
+                                <input type="checkbox" id="sim_pres_${id}" style="width:18px; height:18px; accent-color:var(--primary);" onchange="enviarComandoIndividual('${id}', 'presenca', this.checked)">
+                                Simular Presença Humana
+                            </label>
                         </div>
                         
+                        <div class="button-group" style="margin-bottom: 12px;">
+                            <button id="btn_modo_${id}" class="btn active-ac" onclick="toggleModo('${id}')" style="width: 100%;">🛡️ MODO DA SALA: ATIVO</button>
+                        </div>
                         <div class="button-group">
                             <button id="btn_ac_${id}" class="btn" onclick="toggleAC('${id}')">❄️ AC: OFF</button>
                             <button id="btn_luz_${id}" class="btn" onclick="toggleLuz('${id}')">💡 Luz: OFF</button>
@@ -388,16 +481,74 @@
 
         function updateLabel(id, val) { document.getElementById(id).innerText = val; }
 
+        function toggleModo(id) {
+            const isAtivo = state[id].modo_ac !== 'desativado';
+            const novoModo = isAtivo ? 'desativado' : 'ativo';
+            state[id].modo_ac = novoModo;
+            
+            const btn = document.getElementById(`btn_modo_${id}`);
+            btn.innerText = `🛡️ MODO DA SALA: ${novoModo === 'ativo' ? 'ATIVO (Auto)' : 'DESATIVADO'}`;
+            btn.classList.toggle('active-ac', novoModo === 'ativo');
+            btn.style.borderColor = novoModo === 'ativo' ? 'var(--primary)' : 'var(--danger)';
+            btn.style.color = novoModo === 'ativo' ? 'var(--primary)' : 'var(--danger)';
+            
+            if (novoModo === 'desativado') {
+                state[id].ac = 'desligado';
+                const btnAc = document.getElementById(`btn_ac_${id}`);
+                if (btnAc) {
+                    btnAc.innerText = '❄️ AC: OFF';
+                    btnAc.classList.remove('active-ac');
+                }
+                const statEl = document.getElementById(`stat_${id}`);
+                if (statEl) {
+                    statEl.innerText = 'DESLIGADO';
+                    statEl.style.color = 'var(--danger)';
+                }
+                const badgeEl = document.getElementById(`badge_${id}`);
+                if (badgeEl) {
+                    badgeEl.innerText = 'DESATIVADO';
+                    badgeEl.style.background = 'var(--danger)';
+                    badgeEl.style.boxShadow = 'none';
+                }
+                document.getElementById(`card_${id}`).style.borderColor = 'var(--border)';
+                
+                enviarComandoIndividualExt(id, { modo_ac: 'desativado', comando: 'desligar' });
+            } else {
+                const badgeEl = document.getElementById(`badge_${id}`);
+                if (badgeEl) {
+                    badgeEl.innerText = 'ATIVO';
+                    badgeEl.style.background = 'var(--primary)';
+                    badgeEl.style.boxShadow = '0 0 10px var(--primary)';
+                }
+                document.getElementById(`card_${id}`).style.borderColor = 'var(--primary)';
+                
+                enviarComandoIndividualExt(id, { modo_ac: 'ativo' });
+            }
+        }
+
         function toggleAC(id) {
-            state[id].ac = state[id].ac === 'ligado' ? 'desligado' : 'ligado';
-            
-            // Feedback visual imediato
-            const btn = document.getElementById(`btn_ac_${id}`);
             const isOn = state[id].ac === 'ligado';
-            btn.innerText = `❄️ AC: ${isOn ? 'ON' : 'OFF'}`;
-            btn.classList.toggle('active-ac', isOn);
+            const novoCmd = isOn ? 'desligar' : 'ligar';
+            state[id].ac = novoCmd === 'ligar' ? 'ligado' : 'desligado';
             
-            enviarComandoIndividual(id, 'comando', isOn ? 'ligar' : 'desligar');
+            const btn = document.getElementById(`btn_ac_${id}`);
+            btn.innerText = `❄️ AC: ${novoCmd === 'ligar' ? 'ON' : 'OFF'}`;
+            btn.classList.toggle('active-ac', novoCmd === 'ligar');
+            
+            const statEl = document.getElementById(`stat_${id}`);
+            const badgeEl = document.getElementById(`badge_${id}`);
+            if (statEl) {
+                statEl.innerText = novoCmd === 'ligar' ? 'LIGADO' : 'DESLIGADO';
+                statEl.style.color = novoCmd === 'ligar' ? 'var(--primary)' : 'var(--danger)';
+            }
+            if (badgeEl) {
+                badgeEl.innerText = novoCmd === 'ligar' ? 'LIGADO' : 'DESLIGADO';
+                badgeEl.style.background = novoCmd === 'ligar' ? 'var(--primary)' : 'var(--danger)';
+                badgeEl.style.boxShadow = novoCmd === 'ligar' ? '0 0 10px var(--primary)' : 'none';
+            }
+            document.getElementById(`card_${id}`).style.borderColor = novoCmd === 'ligar' ? 'var(--primary)' : 'var(--border)';
+
+            enviarComandoIndividualExt(id, { comando: novoCmd });
         }
 
         function toggleLuz(id) {
@@ -443,21 +594,12 @@
                             const acStat = data.status_ac || data.comando;
                             if (acStat) {
                                 const isOn = (acStat === 'ligado' || acStat === 'ligar');
-                                console.log(`[UI Update] ${id} AC is now ${isOn ? 'ON' : 'OFF'}`);
                                 
-                                // Atualiza o texto no grid
+                                // Atualiza o texto no grid de monitoramento
                                 const el = document.getElementById(`stat_${id}`);
                                 if (el) {
                                     el.innerText = isOn ? 'LIGADO' : 'DESLIGADO';
                                     el.style.color = isOn ? 'var(--accent)' : 'var(--danger)';
-                                }
-
-                                // Atualiza o Badge no cabeçalho
-                                const badge = document.getElementById(`badge_${id}`);
-                                if (badge) {
-                                    badge.innerText = isOn ? 'LIGADO' : 'DESLIGADO';
-                                    badge.style.background = isOn ? 'var(--accent)' : 'var(--danger)';
-                                    badge.style.boxShadow = isOn ? '0 0 10px var(--accent)' : 'none';
                                 }
                                 
                                 // Sincroniza o estado interno e botões
@@ -491,6 +633,38 @@
                             if (data.setpoint_ac) {
                                 document.getElementById(`set_${id}`).value = data.setpoint_ac;
                                 document.getElementById(`lbl_set_${id}`).innerText = data.setpoint_ac;
+                            }
+                            
+                            if (data.presenca !== undefined) {
+                                document.getElementById(`pres_${id}`).innerText = data.presenca ? 'Sim' : 'Não';
+                                document.getElementById(`pres_${id}`).style.color = data.presenca ? 'var(--accent)' : 'var(--text)';
+                                const chk = document.getElementById(`sim_pres_${id}`);
+                                if (chk && chk.checked !== data.presenca) {
+                                    chk.checked = data.presenca;
+                                }
+                            }
+                            
+                            if (data.modo_ac !== undefined) {
+                                state[id].modo_ac = data.modo_ac;
+                                const isAtivo = data.modo_ac === 'ativo';
+                                
+                                // Atualiza o Badge no cabeçalho (status da SALA)
+                                const badge = document.getElementById(`badge_${id}`);
+                                if (badge) {
+                                    badge.innerText = isAtivo ? 'ATIVO' : 'DESATIVADO';
+                                    badge.style.background = isAtivo ? 'var(--primary)' : 'var(--danger)';
+                                    badge.style.boxShadow = isAtivo ? '0 0 10px var(--primary)' : 'none';
+                                }
+                                document.getElementById(`card_${id}`).style.borderColor = isAtivo ? 'var(--primary)' : 'var(--border)';
+                                
+                                // Atualiza o botão de modo
+                                const btn = document.getElementById(`btn_modo_${id}`);
+                                if (btn) {
+                                    btn.innerText = `🛡️ MODO DA SALA: ${isAtivo ? 'ATIVO (Auto)' : 'DESATIVADO'}`;
+                                    btn.classList.toggle('active-ac', isAtivo);
+                                    btn.style.borderColor = isAtivo ? 'var(--primary)' : 'var(--danger)';
+                                    btn.style.color = isAtivo ? 'var(--primary)' : 'var(--danger)';
+                                }
                             }
                             
                             document.getElementById(`time_${id}`).innerText = new Date().toLocaleTimeString();
@@ -557,12 +731,41 @@
             if (logEl.children.length > 30) logEl.lastChild.remove();
         }
 
+        function enviarComandoIndividualExt(id, payloadObj) {
+            if (!mqttClient || !mqttClient.isConnected()) return showToast("Erro: MQTT desconectado", "var(--danger)");
+            const topic = `ac-iot/${id}/comando`;
+            const msg = new Paho.MQTT.Message(JSON.stringify(payloadObj));
+            msg.destinationName = topic;
+            mqttClient.send(msg);
+            log(topic, JSON.stringify(payloadObj), 'out');
+            showToast(`Comando avançado enviado para ${id.toUpperCase()}`);
+        }
+
+        function enviarComandoGlobalExt(payloadObj) {
+            if (!mqttClient || !mqttClient.isConnected()) return showToast("Erro: MQTT desconectado", "var(--danger)");
+            const topic = `ac-iot/all/comando`;
+            const msg = new Paho.MQTT.Message(JSON.stringify(payloadObj));
+            msg.destinationName = topic;
+            mqttClient.send(msg);
+            log(topic, JSON.stringify(payloadObj), 'out');
+            showToast(`Comando GLOBAL avançado enviado!`);
+        }
+        
         function showToast(msg, color) {
             const t = document.getElementById('toast');
             t.innerText = msg;
             t.style.background = color || 'var(--accent)';
             t.classList.add('show');
             setTimeout(() => t.classList.remove('show'), 3000);
+        }
+
+        function enviarComandoSimulador(field, value) {
+            const target = document.getElementById('sim_target').value;
+            if (target === 'all') {
+                enviarComandoGlobal(field, value);
+            } else {
+                enviarComandoIndividual(target, field, value);
+            }
         }
 
         window.onload = () => { connect(); };

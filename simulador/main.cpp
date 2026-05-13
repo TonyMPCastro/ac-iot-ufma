@@ -24,6 +24,11 @@ struct RoomConfig {
     double umidade_max;
     int luz_min;
     int luz_max;
+    double temp_simulada; // Temperatura forçada via simulador web
+    bool presenca; // Sensor de presença humana
+    double umidade_simulada; // Forçada
+    int luz_simulada; // Forçada
+    std::string modo_ac; // "ativo" ou "desativado"
 };
 
 static std::map<std::string, RoomConfig> SALAS;
@@ -50,16 +55,24 @@ static int random_int(int a, int b) {
 
 static json gerar_dados(const RoomConfig& sala) {
     double temperatura;
-    if (sala.status == "desligado") {
+    if (sala.temp_simulada > 0.0) {
+        temperatura = sala.temp_simulada;
+    } else if (sala.status == "desligado") {
         temperatura = random_double(sala.temp_max, sala.temp_max + 2.0);
     } else {
         temperatura = random_double(sala.setpoint - 0.5, sala.setpoint + 0.5);
     }
 
-    double umidade = random_double(sala.umidade_min, sala.umidade_max);
-    int luminosidade = (sala.luz == "ligado")
-        ? random_int(800, 1100)
-        : random_int(5, 50);
+    double umidade = (sala.umidade_simulada > 0.0) ? sala.umidade_simulada : random_double(sala.umidade_min, sala.umidade_max);
+    
+    int luminosidade;
+    if (sala.luz_simulada >= 0) {
+        luminosidade = sala.luz_simulada;
+    } else {
+        luminosidade = (sala.luz == "ligado")
+            ? random_int(800, 1100)
+            : random_int(5, 50);
+    }
 
     return json{
         {"id_sala", sala.id},
@@ -69,6 +82,8 @@ static json gerar_dados(const RoomConfig& sala) {
         {"temperatura", std::round(temperatura * 100.0) / 100.0},
         {"umidade", std::round(umidade * 100.0) / 100.0},
         {"luminosidade", luminosidade},
+        {"presenca", sala.presenca},
+        {"modo_ac", sala.modo_ac},
         {"timestamp", static_cast<long>(std::time(nullptr))}
     };
 }
@@ -172,6 +187,48 @@ static void on_message(struct mosquitto* mosq, void* userdata, const struct mosq
                 }
             }
 
+            if (dados.contains("temperatura")) {
+                try {
+                    sala.temp_simulada = dados["temperatura"].get<double>();
+                    mudou = true;
+                } catch (...) {
+                }
+            }
+
+            if (dados.contains("presenca")) {
+                try {
+                    sala.presenca = dados["presenca"].get<bool>();
+                    mudou = true;
+                } catch (...) {
+                }
+            }
+
+            if (dados.contains("umidade")) {
+                try {
+                    sala.umidade_simulada = dados["umidade"].get<double>();
+                    mudou = true;
+                } catch (...) {
+                }
+            }
+
+            if (dados.contains("luminosidade")) {
+                try {
+                    sala.luz_simulada = dados["luminosidade"].get<int>();
+                    mudou = true;
+                } catch (...) {
+                }
+            }
+
+            if (dados.contains("modo_ac") && dados["modo_ac"].is_string()) {
+                std::string modo = dados["modo_ac"].get<std::string>();
+                if (modo == "ativo" || modo == "desativado") {
+                    if (sala.modo_ac != modo) {
+                        sala.modo_ac = modo;
+                        mudou = true;
+                    }
+                }
+            }
+
             if (mudou) {
                 std::cout << "[COMANDO] " << id_sala << " atualizado: AC=" << sala.status
                           << ", Setpoint=" << sala.setpoint << "°C, Luz=" << sala.luz << "\n";
@@ -188,12 +245,12 @@ int main() {
     BROKER = getenv_or("MQTT_BROKER", "mosquitto");
     PORT = std::atoi(getenv_or("MQTT_PORT", "1883").c_str());
     INTERVALO = std::atoi(getenv_or("PUBLISH_INTERVAL", "60").c_str());
-    if (INTERVALO <= 0) INTERVALO = 60;
+    if (INTERVALO <= 0) INTERVALO = 20;
 
     SALAS = {
-        {"sala01", {"sala01", "ac-iot/sala01/sensores", "ligado", 22.0, "desligado", 20.0, 25.0, 40.0, 50.0, 300, 500}},
-        {"sala02", {"sala02", "ac-iot/sala02/sensores", "ligado", 24.0, "desligado", 25.0, 35.0, 50.0, 70.0, 800, 1000}},
-        {"sala03", {"sala03", "ac-iot/sala03/sensores", "ligado", 23.0, "desligado", 22.0, 28.0, 45.0, 60.0, 100, 800}}
+        {"sala01", {"sala01", "ac-iot/sala01/sensores", "ligado", 22.0, "desligado", 20.0, 25.0, 40.0, 50.0, 300, 500, 0.0, false, 0.0, -1, "ativo"}},
+        {"sala02", {"sala02", "ac-iot/sala02/sensores", "ligado", 24.0, "desligado", 25.0, 35.0, 50.0, 70.0, 800, 1000, 0.0, false, 0.0, -1, "ativo"}},
+        {"sala03", {"sala03", "ac-iot/sala03/sensores", "ligado", 23.0, "desligado", 22.0, 28.0, 45.0, 60.0, 100, 800, 0.0, false, 0.0, -1, "ativo"}}
     };
 
     mosquitto_lib_init();
