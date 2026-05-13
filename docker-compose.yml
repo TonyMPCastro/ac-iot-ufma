@@ -52,6 +52,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ──────────────────────────────────────────────
+  # InterSCity Local Bridge
+  # ──────────────────────────────────────────────
+  interscity:
+    build:
+      context: ./interscity
+    container_name: ac_iot_interscity
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./interscity/.env
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   mosquitto_data:
   mosquitto_log:

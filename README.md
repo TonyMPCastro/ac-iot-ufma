@@ -27,7 +27,7 @@ Projeto acadêmico desenvolvido na **UFMA** (Universidade Federal do Maranhão) 
        ▼ WebSockets (porta 9001)
 ┌───────────────────────────┐
 │ Plataforma de Simulação   │
-│ (Painel Web e Python)     │
+│ (Painel Web e C++)        │
 └───────────────────────────┘
 ```
 
@@ -36,7 +36,7 @@ Projeto acadêmico desenvolvido na **UFMA** (Universidade Federal do Maranhão) 
 | Componente | Tecnologia | Execução |
 |---|---|---|
 | **Sensores + Atuador** | ESP32 + DHT22 + PIR + IR LED | Firmware local (PlatformIO / Wokwi) |
-| **Simulador (Backend)** | Python | Docker |
+| **Simulador (Backend)** | C++ | Docker |
 | **Simulador (Frontend)** | HTML + CSS + JS (Paho MQTT) | Navegador Web |
 | **Broker MQTT** | Eclipse Mosquitto 2.x | Docker |
 | **Middleware / Dashboard** | Node-RED + node-red-dashboard | Docker |
@@ -55,7 +55,7 @@ ac-iot-ufma/
 │   │       └── mosquitto.conf  # Configuração do broker MQTT
 │   └── nodered/
 │       └── data/               # Volume persistente (flows.json)
-├── simulador/                  # Script Python que simula 5 salas e envia MQTT
+├── simulador/                  # Simulador C++ que gera 5 salas e envia MQTT
 ├── simulador-web/              # Interface Web para simulação manual via WebSockets
 │   └── index.html
 ├── firmware/
@@ -105,14 +105,23 @@ Escolha o terminal de acordo com seu sistema operacional:
 #### 🪟 Windows
 Use o **PowerShell** ou o **Windows Terminal**:
 ```powershell
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 #### 🍎 macOS
 Use o **Terminal** nativo ou **iTerm2**:
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
+
+#### Serviço InterSCity local
+
+Para iniciar apenas o serviço local de integração InterSCity:
+```bash
+docker compose up -d interscity
+```
+
+O serviço ficará disponível em `http://localhost:5000` e o Node-RED pode enviar telemetria para `http://interscity:5000/telemetry` quando estiver no mesmo Docker Compose.
 
 ---
 
@@ -135,9 +144,9 @@ docker-compose ps
 
 O projeto agora conta com uma plataforma completa de simulação para testar a comunicação MQTT sem depender de hardware físico real:
 
-### 1. Simulador Automático (Python)
+### 1. Simulador Automático (C++)
 
-Por padrão, ao rodar `docker compose up -d`, o contêiner `simulador` começa a rodar e envia leituras aleatórias para 5 salas diferentes a cada 5 segundos nos tópicos `telemetria/esp32/salaXX`.
+Por padrão, ao rodar `docker compose up -d`, o contêiner `simulador` começa a rodar e envia leituras aleatórias para 3 salas diferentes a cada 60 segundos nos tópicos `ac-iot/salaXX/sensores`.
 
 Para ver os logs do simulador e as mensagens que estão sendo geradas, você pode rodar:
 
@@ -157,7 +166,7 @@ Além do simulador automático, você pode utilizar um **Painel Web Visual** par
 No painel, você verá as leituras sendo atualizadas e poderá usar os sliders para alterar os valores de Temperatura, Umidade e Luminosidade. Após ajustar, clique em **"Publicar Simulação Manual"** e a nova leitura será enviada ao broker MQTT!
 
 **Alternando para o modo "Apenas Manual":**
-Se você quiser desligar as atualizações automáticas do Python (para que as leituras não fiquem mudando sozinhas de 5 em 5 segundos), pare o contêiner do simulador:
+Se você quiser desligar as atualizações automáticas do simulador C++, pare o contêiner do simulador:
 
 ```cmd
 cmd /c docker compose stop simulador
@@ -213,7 +222,7 @@ docker compose down -v
 
 - [x] **Etapa 01** — Preparação do Ambiente
 - [x] **Etapa 02** — Estruturação do Repositório
-- [x] **Etapa 03** — Plataforma de Simulação (Python e Web UI)
+- [x] **Etapa 03** — Plataforma de Simulação (C++ e Web UI)
 - [ ] **Etapa 04** — Firmware ESP32 (sensores + MQTT)
 - [ ] **Etapa 05** — Fluxos Node-RED (regras de automação)
 - [ ] **Etapa 06** — Dashboard de monitoramento

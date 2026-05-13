@@ -5,7 +5,23 @@
         "label": "Automação - 5 Salas",
         "disabled": false,
         "info": "",
-        "env": []
+        "env": [
+            {
+                "name": "INTERSCITY_API_URL",
+                "value": "http://interscity:5000",
+                "type": "str"
+            },
+            {
+                "name": "INTERSCITY_API_TOKEN",
+                "value": "seu_token_aqui",
+                "type": "str"
+            },
+            {
+                "name": "INTERSCITY_TELEMETRY_PATH",
+                "value": "/telemetry",
+                "type": "str"
+            }
+        ]
     },
     {
         "id": "tab_simulacao",
@@ -67,7 +83,8 @@
         "wires": [
             [
                 "function_automacao",
-                "debug_telemetria"
+                "debug_telemetria",
+                "function_interscity_map"
             ]
         ]
     },
@@ -124,6 +141,80 @@
         "statusType": "auto",
         "x": 470,
         "y": 80,
+        "wires": []
+    },
+    {
+        "id": "function_interscity_map",
+        "type": "function",
+        "z": "fluxo_5_salas",
+        "name": "Mapear para InterSCity",
+        "func": "const payload = msg.payload || {};
+const partes = msg.topic ? msg.topic.split('/') : [];
+const id_sala = payload.id_sala || payload.device_id || (partes.length >= 2 ? partes[1] : null);
+msg.payload = {
+    device_id: id_sala,
+    status_ac: payload.status_ac,
+    temperature: payload.temperatura,
+    humidity: payload.umidade,
+    luminosity: payload.luminosidade,
+    timestamp: payload.timestamp,
+    raw: payload
+};
+msg.headers = {
+    \"Content-Type\": \"application/json\",
+    \"Authorization\": \"Bearer \" + env.get(\"INTERSCITY_API_TOKEN\")
+};
+msg.url = env.get("INTERSCITY_API_URL") + env.get("INTERSCITY_TELEMETRY_PATH");
+return msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 240,
+        "wires": [
+            [
+                "http_request_interscity"
+            ]
+        ]
+    },
+    {
+        "id": "http_request_interscity",
+        "type": "http request",
+        "z": "fluxo_5_salas",
+        "name": "Enviar InterSCity",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "authType": "",
+        "x": 680,
+        "y": 240,
+        "wires": [
+            [
+                "debug_interscity_response"
+            ]
+        ]
+    },
+    {
+        "id": "debug_interscity_response",
+        "type": "debug",
+        "z": "fluxo_5_salas",
+        "name": "Debug InterSCity",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 910,
+        "y": 240,
         "wires": []
     },
     {
