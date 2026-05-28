@@ -1,86 +1,2290 @@
 [
-    {"id":"tab_auto","type":"tab","label":"Automação AC","disabled":false,"info":"Lógica automática de controle do AC."},
-    {"id":"tab_global","type":"tab","label":"Controle Global","disabled":false,"info":"Comandos para todas as salas."},
-    {"id":"tab_sala01","type":"tab","label":"Sala 01","disabled":false,"info":"Controle individual da Sala 01."},
-    {"id":"tab_sala02","type":"tab","label":"Sala 02","disabled":false,"info":"Controle individual da Sala 02."},
-    {"id":"tab_sala03","type":"tab","label":"Sala 03","disabled":false,"info":"Controle individual da Sala 03."},
-    {
-        "id":"mqtt_broker_docker","type":"mqtt-broker","name":"Mosquitto Docker",
-        "broker":"mosquitto","port":"1883","clientid":"nodered_client",
-        "autoConnect":true,"usetls":false,"protocolVersion":"4","keepalive":"60",
-        "cleansession":true,"autoUnsubscribe":true,
-        "birthTopic":"","birthQos":"0","birthPayload":"","birthMsg":{},
-        "closeTopic":"","closeQos":"0","closePayload":"","closeMsg":{},
-        "willTopic":"","willQos":"0","willPayload":"","willMsg":{},
-        "userProps":"","sessionExpiry":""
-    },
-
-    {"id":"mqtt_in_sensores","type":"mqtt in","z":"tab_auto","name":"Sensores ac-iot/+/sensores","topic":"ac-iot/+/sensores","qos":"0","datatype":"json","broker":"mqtt_broker_docker","nl":false,"rap":true,"rh":0,"inputs":0,"x":180,"y":120,"wires":[["func_auto","dbg_sensor"]]},
-    {
-        "id":"func_auto","type":"function","z":"tab_auto",
-        "name":"Automação AC (Temp + Presença + Timer 1min)",
-        "func":"var payload = msg.payload;\nif (typeof payload === 'string') {\n    try { payload = JSON.parse(payload); }\n    catch(e) { return null; }\n}\nif (!payload) return null;\nif (payload.hasOwnProperty('comando')) return null;\nif (payload.modo_ac === 'desativado') return null;\n\nvar id_sala = payload.id_sala;\nif (!id_sala && msg.topic) {\n    var p = msg.topic.split('/');\n    if (p.length >= 2) id_sala = p[1];\n}\nif (!id_sala || id_sala === 'all') return null;\n\nvar temp = Number(payload.temperatura);\nif (!Number.isFinite(temp)) return null;\n\nvar set = Number.isFinite(Number(payload.setpoint_ac)) ? Number(payload.setpoint_ac) : 22;\nvar m = 2;\nvar stAC = payload.status_ac;\nvar pres = payload.presenca === true;\nvar now = Date.now();\n\nvar ctx = context.get('salas') || {};\nif (!ctx[id_sala]) ctx[id_sala] = { lastPres: now, done: false };\nvar s = ctx[id_sala];\nif (pres) { s.lastPres = now; s.done = false; }\ncontext.set('salas', ctx);\n\nvar acao = null, razao = '';\n\nif (pres) {\n    if (stAC !== 'ligado' && temp > (set + m)) { acao = 'ligar'; razao = 'presenca_calor'; }\n    else if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'presenca_frio'; }\n} else {\n    if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'sem_presenca_frio'; }\n    var mins = (now - s.lastPres) / 60000;\n    if (mins >= 1 && stAC === 'ligado' && !s.done) {\n        acao = 'desligar'; razao = 'ausencia_1min';\n        s.done = true; context.set('salas', ctx);\n        node.warn(id_sala + ': AC desligado por ausência (1min)');\n    }\n}\n\nif (!acao) return null;\nreturn { topic: 'ac-iot/' + id_sala + '/comando', payload: { id_sala: id_sala, comando: acao, razao: 'automacao_' + razao } };",
-        "outputs":1,"timeout":"","noerr":0,"initialize":"","finalize":"","libs":[],
-        "x":520,"y":120,"wires":[["mqtt_out_auto","dbg_auto"]]
-    },
-    {"id":"mqtt_out_auto","type":"mqtt out","z":"tab_auto","name":"Enviar Comando","topic":"","qos":"0","retain":"false","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"mqtt_broker_docker","x":810,"y":100,"wires":[]},
-    {"id":"dbg_sensor","type":"debug","z":"tab_auto","name":"Debug Sensores","active":false,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":490,"y":60,"wires":[]},
-    {"id":"dbg_auto","type":"debug","z":"tab_auto","name":"Debug Automação","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":810,"y":160,"wires":[]},
-
-    {"id":"mqtt_out_global","type":"mqtt out","z":"tab_global","name":"Publicar Global","topic":"","qos":"0","retain":"false","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"mqtt_broker_docker","x":620,"y":300,"wires":[]},
-
-    {"id":"g_ativar","type":"inject","z":"tab_global","name":"🛡️ Ativar Todas","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"modo_ac\":\"ativo\"}","payloadType":"json","x":170,"y":60,"wires":[["mqtt_out_global"]]},
-    {"id":"g_desativar","type":"inject","z":"tab_global","name":"🛡️ Desativar Todas","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}","payloadType":"json","x":180,"y":110,"wires":[["mqtt_out_global"]]},
-
-    {"id":"g_ac_on","type":"inject","z":"tab_global","name":"❄️ Ligar Todos ACs","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"comando\":\"ligar\"}","payloadType":"json","x":180,"y":180,"wires":[["mqtt_out_global"]]},
-    {"id":"g_ac_off","type":"inject","z":"tab_global","name":"❄️ Desligar Todos ACs","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"comando\":\"desligar\"}","payloadType":"json","x":190,"y":230,"wires":[["mqtt_out_global"]]},
-
-    {"id":"g_luz_on","type":"inject","z":"tab_global","name":"💡 Ligar Todas Luzes","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"luz\":\"ligar\"}","payloadType":"json","x":180,"y":300,"wires":[["mqtt_out_global"]]},
-    {"id":"g_luz_off","type":"inject","z":"tab_global","name":"💡 Desligar Todas Luzes","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"luz\":\"desligar\"}","payloadType":"json","x":190,"y":350,"wires":[["mqtt_out_global"]]},
-
-    {"id":"g_set20","type":"inject","z":"tab_global","name":"🌡️ Setpoint 20°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"setpoint\":20}","payloadType":"json","x":180,"y":420,"wires":[["mqtt_out_global"]]},
-    {"id":"g_set22","type":"inject","z":"tab_global","name":"🌡️ Setpoint 22°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"setpoint\":22}","payloadType":"json","x":180,"y":470,"wires":[["mqtt_out_global"]]},
-    {"id":"g_set25","type":"inject","z":"tab_global","name":"🌡️ Setpoint 25°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"setpoint\":25}","payloadType":"json","x":180,"y":520,"wires":[["mqtt_out_global"]]},
-
-    {"id":"g_pres_on","type":"inject","z":"tab_global","name":"👤 Presença ON (todas)","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"presenca\":true}","payloadType":"json","x":190,"y":590,"wires":[["mqtt_out_global"]]},
-    {"id":"g_pres_off","type":"inject","z":"tab_global","name":"👤 Presença OFF (todas)","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/all/comando","payload":"{\"presenca\":false}","payloadType":"json","x":190,"y":640,"wires":[["mqtt_out_global"]]},
-
-    {"id":"out_s01","type":"mqtt out","z":"tab_sala01","name":"Comando Sala01","topic":"","qos":"0","retain":"false","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"mqtt_broker_docker","x":600,"y":300,"wires":[]},
-    {"id":"s01_ativar","type":"inject","z":"tab_sala01","name":"🛡️ Ativar Sala","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"modo_ac\":\"ativo\"}","payloadType":"json","x":170,"y":60,"wires":[["out_s01"]]},
-    {"id":"s01_desativar","type":"inject","z":"tab_sala01","name":"🛡️ Desativar Sala","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}","payloadType":"json","x":180,"y":110,"wires":[["out_s01"]]},
-    {"id":"s01_ac_on","type":"inject","z":"tab_sala01","name":"❄️ Ligar AC","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"comando\":\"ligar\"}","payloadType":"json","x":160,"y":180,"wires":[["out_s01"]]},
-    {"id":"s01_ac_off","type":"inject","z":"tab_sala01","name":"❄️ Desligar AC","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"comando\":\"desligar\"}","payloadType":"json","x":170,"y":230,"wires":[["out_s01"]]},
-    {"id":"s01_luz_on","type":"inject","z":"tab_sala01","name":"💡 Ligar Luz","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"luz\":\"ligar\"}","payloadType":"json","x":160,"y":300,"wires":[["out_s01"]]},
-    {"id":"s01_luz_off","type":"inject","z":"tab_sala01","name":"💡 Desligar Luz","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"luz\":\"desligar\"}","payloadType":"json","x":170,"y":350,"wires":[["out_s01"]]},
-    {"id":"s01_set20","type":"inject","z":"tab_sala01","name":"🌡️ Set 20°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"setpoint\":20}","payloadType":"json","x":160,"y":420,"wires":[["out_s01"]]},
-    {"id":"s01_set22","type":"inject","z":"tab_sala01","name":"🌡️ Set 22°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"setpoint\":22}","payloadType":"json","x":160,"y":470,"wires":[["out_s01"]]},
-    {"id":"s01_set25","type":"inject","z":"tab_sala01","name":"🌡️ Set 25°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"setpoint\":25}","payloadType":"json","x":160,"y":520,"wires":[["out_s01"]]},
-    {"id":"s01_pres_on","type":"inject","z":"tab_sala01","name":"👤 Presença ON","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"presenca\":true}","payloadType":"json","x":170,"y":590,"wires":[["out_s01"]]},
-    {"id":"s01_pres_off","type":"inject","z":"tab_sala01","name":"👤 Presença OFF","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala01/comando","payload":"{\"presenca\":false}","payloadType":"json","x":170,"y":640,"wires":[["out_s01"]]},
-
-    {"id":"out_s02","type":"mqtt out","z":"tab_sala02","name":"Comando Sala02","topic":"","qos":"0","retain":"false","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"mqtt_broker_docker","x":600,"y":300,"wires":[]},
-    {"id":"s02_ativar","type":"inject","z":"tab_sala02","name":"🛡️ Ativar Sala","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"modo_ac\":\"ativo\"}","payloadType":"json","x":170,"y":60,"wires":[["out_s02"]]},
-    {"id":"s02_desativar","type":"inject","z":"tab_sala02","name":"🛡️ Desativar Sala","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}","payloadType":"json","x":180,"y":110,"wires":[["out_s02"]]},
-    {"id":"s02_ac_on","type":"inject","z":"tab_sala02","name":"❄️ Ligar AC","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"comando\":\"ligar\"}","payloadType":"json","x":160,"y":180,"wires":[["out_s02"]]},
-    {"id":"s02_ac_off","type":"inject","z":"tab_sala02","name":"❄️ Desligar AC","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"comando\":\"desligar\"}","payloadType":"json","x":170,"y":230,"wires":[["out_s02"]]},
-    {"id":"s02_luz_on","type":"inject","z":"tab_sala02","name":"💡 Ligar Luz","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"luz\":\"ligar\"}","payloadType":"json","x":160,"y":300,"wires":[["out_s02"]]},
-    {"id":"s02_luz_off","type":"inject","z":"tab_sala02","name":"💡 Desligar Luz","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"luz\":\"desligar\"}","payloadType":"json","x":170,"y":350,"wires":[["out_s02"]]},
-    {"id":"s02_set20","type":"inject","z":"tab_sala02","name":"🌡️ Set 20°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"setpoint\":20}","payloadType":"json","x":160,"y":420,"wires":[["out_s02"]]},
-    {"id":"s02_set22","type":"inject","z":"tab_sala02","name":"🌡️ Set 22°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"setpoint\":22}","payloadType":"json","x":160,"y":470,"wires":[["out_s02"]]},
-    {"id":"s02_set25","type":"inject","z":"tab_sala02","name":"🌡️ Set 25°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"setpoint\":25}","payloadType":"json","x":160,"y":520,"wires":[["out_s02"]]},
-    {"id":"s02_pres_on","type":"inject","z":"tab_sala02","name":"👤 Presença ON","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"presenca\":true}","payloadType":"json","x":170,"y":590,"wires":[["out_s02"]]},
-    {"id":"s02_pres_off","type":"inject","z":"tab_sala02","name":"👤 Presença OFF","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala02/comando","payload":"{\"presenca\":false}","payloadType":"json","x":170,"y":640,"wires":[["out_s02"]]},
-
-    {"id":"out_s03","type":"mqtt out","z":"tab_sala03","name":"Comando Sala03","topic":"","qos":"0","retain":"false","respTopic":"","contentType":"","userProps":"","correl":"","expiry":"","broker":"mqtt_broker_docker","x":600,"y":300,"wires":[]},
-    {"id":"s03_ativar","type":"inject","z":"tab_sala03","name":"🛡️ Ativar Sala","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"modo_ac\":\"ativo\"}","payloadType":"json","x":170,"y":60,"wires":[["out_s03"]]},
-    {"id":"s03_desativar","type":"inject","z":"tab_sala03","name":"🛡️ Desativar Sala","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}","payloadType":"json","x":180,"y":110,"wires":[["out_s03"]]},
-    {"id":"s03_ac_on","type":"inject","z":"tab_sala03","name":"❄️ Ligar AC","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"comando\":\"ligar\"}","payloadType":"json","x":160,"y":180,"wires":[["out_s03"]]},
-    {"id":"s03_ac_off","type":"inject","z":"tab_sala03","name":"❄️ Desligar AC","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"comando\":\"desligar\"}","payloadType":"json","x":170,"y":230,"wires":[["out_s03"]]},
-    {"id":"s03_luz_on","type":"inject","z":"tab_sala03","name":"💡 Ligar Luz","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"luz\":\"ligar\"}","payloadType":"json","x":160,"y":300,"wires":[["out_s03"]]},
-    {"id":"s03_luz_off","type":"inject","z":"tab_sala03","name":"💡 Desligar Luz","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"luz\":\"desligar\"}","payloadType":"json","x":170,"y":350,"wires":[["out_s03"]]},
-    {"id":"s03_set20","type":"inject","z":"tab_sala03","name":"🌡️ Set 20°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"setpoint\":20}","payloadType":"json","x":160,"y":420,"wires":[["out_s03"]]},
-    {"id":"s03_set22","type":"inject","z":"tab_sala03","name":"🌡️ Set 22°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"setpoint\":22}","payloadType":"json","x":160,"y":470,"wires":[["out_s03"]]},
-    {"id":"s03_set25","type":"inject","z":"tab_sala03","name":"🌡️ Set 25°C","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"setpoint\":25}","payloadType":"json","x":160,"y":520,"wires":[["out_s03"]]},
-    {"id":"s03_pres_on","type":"inject","z":"tab_sala03","name":"👤 Presença ON","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"presenca\":true}","payloadType":"json","x":170,"y":590,"wires":[["out_s03"]]},
-    {"id":"s03_pres_off","type":"inject","z":"tab_sala03","name":"👤 Presença OFF","props":[{"p":"payload"},{"p":"topic","vt":"str"}],"repeat":"","crontab":"","once":false,"onceDelay":0.1,"topic":"ac-iot/sala03/comando","payload":"{\"presenca\":false}","payloadType":"json","x":170,"y":640,"wires":[["out_s03"]]}
+  {
+    "id": "tab_auto",
+    "type": "tab",
+    "label": "Automação AC",
+    "disabled": false,
+    "info": "Lógica automática de controle do AC."
+  },
+  {
+    "id": "tab_global",
+    "type": "tab",
+    "label": "Controle Global",
+    "disabled": false,
+    "info": "Comandos para todas as salas."
+  },
+  {
+    "id": "tab_sala01",
+    "type": "tab",
+    "label": "Sala 01",
+    "disabled": false,
+    "info": "Controle individual da Sala 01."
+  },
+  {
+    "id": "tab_sala02",
+    "type": "tab",
+    "label": "Sala 02",
+    "disabled": false,
+    "info": "Controle individual da Sala 02."
+  },
+  {
+    "id": "tab_sala03",
+    "type": "tab",
+    "label": "Sala 03",
+    "disabled": false,
+    "info": "Controle individual da Sala 03."
+  },
+  {
+    "id": "mqtt_broker_docker",
+    "type": "mqtt-broker",
+    "name": "Mosquitto Docker",
+    "broker": "mosquitto",
+    "port": "1883",
+    "clientid": "nodered_client",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "autoUnsubscribe": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": "",
+    "willMsg": {},
+    "userProps": "",
+    "sessionExpiry": ""
+  },
+  {
+    "id": "mqtt_in_sensores",
+    "type": "mqtt in",
+    "z": "tab_auto",
+    "name": "Sensores ac-iot/+/sensores",
+    "topic": "ac-iot/+/sensores",
+    "qos": "0",
+    "datatype": "json",
+    "broker": "mqtt_broker_docker",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 180,
+    "y": 120,
+    "wires": [
+      [
+        "func_auto",
+        "dbg_sensor"
+      ]
+    ]
+  },
+  {
+    "id": "func_auto",
+    "type": "function",
+    "z": "tab_auto",
+    "name": "Automação AC (Temp + Presença + Timer 1min)",
+    "func": "var payload = msg.payload;\nif (typeof payload === 'string') {\n    try { payload = JSON.parse(payload); }\n    catch(e) { return null; }\n}\nif (!payload) return null;\nif (payload.hasOwnProperty('comando')) return null;\nif (payload.modo_ac === 'desativado') return null;\n\nvar id_sala = payload.id_sala;\nif (!id_sala && msg.topic) {\n    var p = msg.topic.split('/');\n    if (p.length >= 2) id_sala = p[1];\n}\nif (!id_sala || id_sala === 'all') return null;\n\nvar temp = Number(payload.temperatura);\nif (!Number.isFinite(temp)) return null;\n\nvar set = Number.isFinite(Number(payload.setpoint_ac)) ? Number(payload.setpoint_ac) : 22;\nvar m = 2;\nvar stAC = payload.status_ac;\nvar pres = payload.presenca === true;\nvar now = Date.now();\n\nvar ctx = context.get('salas') || {};\nif (!ctx[id_sala]) ctx[id_sala] = { lastPres: now, done: false };\nvar s = ctx[id_sala];\nif (pres) { s.lastPres = now; s.done = false; }\ncontext.set('salas', ctx);\n\nvar acao = null, razao = '';\n\nif (pres) {\n    if (stAC !== 'ligado' && temp > (set + m)) { acao = 'ligar'; razao = 'presenca_calor'; }\n    else if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'presenca_frio'; }\n} else {\n    if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'sem_presenca_frio'; }\n    var mins = (now - s.lastPres) / 60000;\n    if (mins >= 1 && stAC === 'ligado' && !s.done) {\n        acao = 'desligar'; razao = 'ausencia_1min';\n        s.done = true; context.set('salas', ctx);\n        node.warn(id_sala + ': AC desligado por ausência (1min)');\n    }\n}\n\nif (!acao) return null;\nreturn { topic: 'ac-iot/' + id_sala + '/comando', payload: { id_sala: id_sala, comando: acao, razao: 'automacao_' + razao } };",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 520,
+    "y": 120,
+    "wires": [
+      [
+        "mqtt_out_auto",
+        "dbg_auto"
+      ]
+    ]
+  },
+  {
+    "id": "mqtt_out_auto",
+    "type": "mqtt out",
+    "z": "tab_auto",
+    "name": "Enviar Comando",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_docker",
+    "x": 810,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "dbg_sensor",
+    "type": "debug",
+    "z": "tab_auto",
+    "name": "Debug Sensores",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 490,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "dbg_auto",
+    "type": "debug",
+    "z": "tab_auto",
+    "name": "Debug Automação",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 810,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "mqtt_out_global",
+    "type": "mqtt out",
+    "z": "tab_global",
+    "name": "Publicar Global",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_docker",
+    "x": 620,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "g_ativar",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "🛡️ Ativar Todas",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"modo_ac\":\"ativo\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 60,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_desativar",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "🛡️ Desativar Todas",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 110,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_ac_on",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "❄️ Ligar Todos ACs",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"comando\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 180,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_ac_off",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "❄️ Desligar Todos ACs",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 190,
+    "y": 230,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_luz_on",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "💡 Ligar Todas Luzes",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"luz\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 300,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_luz_off",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "💡 Desligar Todas Luzes",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"luz\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 190,
+    "y": 350,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_set20",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "🌡️ Setpoint 20°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"setpoint\":20}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 420,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_set22",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "🌡️ Setpoint 22°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"setpoint\":22}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 470,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_set25",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "🌡️ Setpoint 25°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"setpoint\":25}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 520,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_pres_on",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "👤 Presença ON (todas)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"presenca\":true}",
+    "payloadType": "json",
+    "x": 190,
+    "y": 590,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "g_pres_off",
+    "type": "inject",
+    "z": "tab_global",
+    "name": "👤 Presença OFF (todas)",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/all/comando",
+    "payload": "{\"presenca\":false}",
+    "payloadType": "json",
+    "x": 190,
+    "y": 640,
+    "wires": [
+      [
+        "mqtt_out_global"
+      ]
+    ]
+  },
+  {
+    "id": "out_s01",
+    "type": "mqtt out",
+    "z": "tab_sala01",
+    "name": "Comando Sala01",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_docker",
+    "x": 600,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "s01_ativar",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "🛡️ Ativar Sala",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"modo_ac\":\"ativo\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 60,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_desativar",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "🛡️ Desativar Sala",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 110,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_ac_on",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "❄️ Ligar AC",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"comando\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 180,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_ac_off",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "❄️ Desligar AC",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 230,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_luz_on",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "💡 Ligar Luz",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"luz\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 300,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_luz_off",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "💡 Desligar Luz",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"luz\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 350,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_set20",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "🌡️ Set 20°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"setpoint\":20}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 420,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_set22",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "🌡️ Set 22°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"setpoint\":22}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 470,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_set25",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "🌡️ Set 25°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"setpoint\":25}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 520,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_pres_on",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "👤 Presença ON",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"presenca\":true}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 590,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "s01_pres_off",
+    "type": "inject",
+    "z": "tab_sala01",
+    "name": "👤 Presença OFF",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala01/comando",
+    "payload": "{\"presenca\":false}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 640,
+    "wires": [
+      [
+        "out_s01"
+      ]
+    ]
+  },
+  {
+    "id": "out_s02",
+    "type": "mqtt out",
+    "z": "tab_sala02",
+    "name": "Comando Sala02",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_docker",
+    "x": 600,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "s02_ativar",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "🛡️ Ativar Sala",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"modo_ac\":\"ativo\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 60,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_desativar",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "🛡️ Desativar Sala",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 110,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_ac_on",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "❄️ Ligar AC",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"comando\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 180,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_ac_off",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "❄️ Desligar AC",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 230,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_luz_on",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "💡 Ligar Luz",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"luz\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 300,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_luz_off",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "💡 Desligar Luz",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"luz\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 350,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_set20",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "🌡️ Set 20°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"setpoint\":20}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 420,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_set22",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "🌡️ Set 22°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"setpoint\":22}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 470,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_set25",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "🌡️ Set 25°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"setpoint\":25}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 520,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_pres_on",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "👤 Presença ON",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"presenca\":true}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 590,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "s02_pres_off",
+    "type": "inject",
+    "z": "tab_sala02",
+    "name": "👤 Presença OFF",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala02/comando",
+    "payload": "{\"presenca\":false}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 640,
+    "wires": [
+      [
+        "out_s02"
+      ]
+    ]
+  },
+  {
+    "id": "out_s03",
+    "type": "mqtt out",
+    "z": "tab_sala03",
+    "name": "Comando Sala03",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_docker",
+    "x": 600,
+    "y": 300,
+    "wires": []
+  },
+  {
+    "id": "s03_ativar",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "🛡️ Ativar Sala",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"modo_ac\":\"ativo\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 60,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_desativar",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "🛡️ Desativar Sala",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"modo_ac\":\"desativado\",\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 180,
+    "y": 110,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_ac_on",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "❄️ Ligar AC",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"comando\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 180,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_ac_off",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "❄️ Desligar AC",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"comando\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 230,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_luz_on",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "💡 Ligar Luz",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"luz\":\"ligar\"}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 300,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_luz_off",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "💡 Desligar Luz",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"luz\":\"desligar\"}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 350,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_set20",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "🌡️ Set 20°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"setpoint\":20}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 420,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_set22",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "🌡️ Set 22°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"setpoint\":22}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 470,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_set25",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "🌡️ Set 25°C",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"setpoint\":25}",
+    "payloadType": "json",
+    "x": 160,
+    "y": 520,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_pres_on",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "👤 Presença ON",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"presenca\":true}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 590,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "s03_pres_off",
+    "type": "inject",
+    "z": "tab_sala03",
+    "name": "👤 Presença OFF",
+    "props": [
+      {
+        "p": "payload"
+      },
+      {
+        "p": "topic",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "ac-iot/sala03/comando",
+    "payload": "{\"presenca\":false}",
+    "payloadType": "json",
+    "x": 170,
+    "y": 640,
+    "wires": [
+      [
+        "out_s03"
+      ]
+    ]
+  },
+  {
+    "id": "ic_tab",
+    "type": "tab",
+    "label": "InterSCity - Ver e Testar",
+    "disabled": false,
+    "info": "Consultas e testes da integracao InterSCity local."
+  },
+  {
+    "id": "ic_comment_read",
+    "type": "comment",
+    "z": "ic_tab",
+    "name": "Consultar InterSCity",
+    "info": "Use estes injects para consultar APIs internas do InterSCity pelo Node-RED.",
+    "x": 180,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_capabilities",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Listar capabilities",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 170,
+    "y": 100,
+    "wires": [
+      [
+        "ic_http_capabilities"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_capabilities",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET /capabilities",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://interscity-resource-cataloguer:3000/capabilities",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 430,
+    "y": 100,
+    "wires": [
+      [
+        "ic_dbg_capabilities"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_capabilities",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "Capabilities InterSCity",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 720,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_resources",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Listar salas/resources",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 180,
+    "y": 150,
+    "wires": [
+      [
+        "ic_http_resources"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_resources",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET /resources",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://interscity-resource-cataloguer:3000/resources",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 420,
+    "y": 150,
+    "wires": [
+      [
+        "ic_dbg_resources"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_resources",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "Resources/Salas InterSCity",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 730,
+    "y": 150,
+    "wires": []
+  },
+  {
+    "id": "ic_comment_last",
+    "type": "comment",
+    "z": "ic_tab",
+    "name": "Ultima telemetria por sala",
+    "info": "Consulta o Data Collector usando os UUIDs fixos cadastrados pelo bridge.",
+    "x": 200,
+    "y": 220,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_last_s01",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Ultima telemetria sala01",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 190,
+    "y": 280,
+    "wires": [
+      [
+        "ic_http_last_s01"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_last_s01",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET sala01 data/last",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://interscity-data-collector:3000/resources/00000000-0000-4000-8000-000000000101/data/last",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 450,
+    "y": 280,
+    "wires": [
+      [
+        "ic_dbg_last_s01"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_last_s01",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "InterSCity sala01 last",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 740,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_last_s02",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Ultima telemetria sala02",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 190,
+    "y": 330,
+    "wires": [
+      [
+        "ic_http_last_s02"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_last_s02",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET sala02 data/last",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://interscity-data-collector:3000/resources/00000000-0000-4000-8000-000000000102/data/last",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 450,
+    "y": 330,
+    "wires": [
+      [
+        "ic_dbg_last_s02"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_last_s02",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "InterSCity sala02 last",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 740,
+    "y": 330,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_last_s03",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Ultima telemetria sala03",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 190,
+    "y": 380,
+    "wires": [
+      [
+        "ic_http_last_s03"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_last_s03",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET sala03 data/last",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://interscity-data-collector:3000/resources/00000000-0000-4000-8000-000000000103/data/last",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 450,
+    "y": 380,
+    "wires": [
+      [
+        "ic_dbg_last_s03"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_last_s03",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "InterSCity sala03 last",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 740,
+    "y": 380,
+    "wires": []
+  },
+  {
+    "id": "ic_comment_mqtt",
+    "type": "comment",
+    "z": "ic_tab",
+    "name": "Testar fluxo completo via MQTT",
+    "info": "Publica telemetria no Mosquitto. O bridge interscity deve captar e gravar no Data Collector.",
+    "x": 220,
+    "y": 460,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_test_s01",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Teste MQTT sala01",
+    "props": [
+      {
+        "p": "sala",
+        "v": "sala01",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 520,
+    "wires": [
+      [
+        "ic_func_test_payload"
+      ]
+    ]
+  },
+  {
+    "id": "ic_inj_test_s02",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Teste MQTT sala02",
+    "props": [
+      {
+        "p": "sala",
+        "v": "sala02",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 570,
+    "wires": [
+      [
+        "ic_func_test_payload"
+      ]
+    ]
+  },
+  {
+    "id": "ic_inj_test_s03",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Teste MQTT sala03",
+    "props": [
+      {
+        "p": "sala",
+        "v": "sala03",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 620,
+    "wires": [
+      [
+        "ic_func_test_payload"
+      ]
+    ]
+  },
+  {
+    "id": "ic_func_test_payload",
+    "type": "function",
+    "z": "ic_tab",
+    "name": "Montar payload MQTT de teste",
+    "func": "const sala = msg.sala || 'sala01';\nconst values = {\n    sala01: { temperatura: 31.7, umidade: 66, luminosidade: 777, setpoint_ac: 21 },\n    sala02: { temperatura: 28.4, umidade: 58, luminosidade: 555, setpoint_ac: 22 },\n    sala03: { temperatura: 24.8, umidade: 52, luminosidade: 333, setpoint_ac: 23 }\n};\nconst v = values[sala] || values.sala01;\nmsg.topic = `ac-iot/${sala}/sensores`;\nmsg.payload = {\n    id_sala: sala,\n    status_ac: 'ligado',\n    setpoint_ac: v.setpoint_ac,\n    status_luz: 'ligado',\n    temperatura: v.temperatura,\n    umidade: v.umidade,\n    luminosidade: v.luminosidade,\n    presenca: true,\n    modo_ac: 'ativo',\n    timestamp: Math.floor(Date.now() / 1000)\n};\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 430,
+    "y": 570,
+    "wires": [
+      [
+        "ic_mqtt_out_test",
+        "ic_dbg_test_payload"
+      ]
+    ]
+  },
+  {
+    "id": "ic_mqtt_out_test",
+    "type": "mqtt out",
+    "z": "ic_tab",
+    "name": "Publicar teste MQTT",
+    "topic": "",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "mqtt_broker_docker",
+    "x": 730,
+    "y": 540,
+    "wires": []
+  },
+  {
+    "id": "ic_dbg_test_payload",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "Payload MQTT enviado",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 730,
+    "y": 600,
+    "wires": []
+  },
+  {
+    "id": "ic_comment_direct",
+    "type": "comment",
+    "z": "ic_tab",
+    "name": "Testar Resource Adaptor direto",
+    "info": "Envia um POST diretamente ao Resource Adaptor, sem passar por MQTT/bridge.",
+    "x": 220,
+    "y": 700,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_direct_s01",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "POST direto sala01",
+    "props": [
+      {
+        "p": "sala",
+        "v": "sala01",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 760,
+    "wires": [
+      [
+        "ic_func_direct_post"
+      ]
+    ]
+  },
+  {
+    "id": "ic_inj_direct_s02",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "POST direto sala02",
+    "props": [
+      {
+        "p": "sala",
+        "v": "sala02",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 810,
+    "wires": [
+      [
+        "ic_func_direct_post"
+      ]
+    ]
+  },
+  {
+    "id": "ic_inj_direct_s03",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "POST direto sala03",
+    "props": [
+      {
+        "p": "sala",
+        "v": "sala03",
+        "vt": "str"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 860,
+    "wires": [
+      [
+        "ic_func_direct_post"
+      ]
+    ]
+  },
+  {
+    "id": "ic_func_direct_post",
+    "type": "function",
+    "z": "ic_tab",
+    "name": "Montar POST InterSCity direto",
+    "func": "const rooms = {\n    sala01: { uuid: '00000000-0000-4000-8000-000000000101', temperatura: 34.2, umidade: 61, luminosidade: 901, setpoint_ac: 20 },\n    sala02: { uuid: '00000000-0000-4000-8000-000000000102', temperatura: 29.9, umidade: 57, luminosidade: 650, setpoint_ac: 22 },\n    sala03: { uuid: '00000000-0000-4000-8000-000000000103', temperatura: 25.5, umidade: 53, luminosidade: 420, setpoint_ac: 23 }\n};\nconst sala = msg.sala || 'sala01';\nconst room = rooms[sala] || rooms.sala01;\nconst date = new Date().toISOString();\nmsg.method = 'POST';\nmsg.url = `http://interscity-resource-adaptor:3000/resources/${room.uuid}/data`;\nmsg.headers = { 'Content-Type': 'application/json' };\nmsg.payload = {\n    data: {\n        temperatura: [{ value: room.temperatura, date }],\n        umidade: [{ value: room.umidade, date }],\n        luminosidade: [{ value: room.luminosidade, date }],\n        presenca: [{ value: true, date }],\n        status_ac: [{ value: 'ligado', date }],\n        setpoint_ac: [{ value: room.setpoint_ac, date }],\n        status_luz: [{ value: 'ligado', date }],\n        modo_ac: [{ value: 'ativo', date }]\n    }\n};\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 430,
+    "y": 810,
+    "wires": [
+      [
+        "ic_http_direct_post"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_direct_post",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "POST /resources/:uuid/data",
+    "method": "use",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 720,
+    "y": 810,
+    "wires": [
+      [
+        "ic_dbg_direct_post"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_direct_post",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "Resposta POST direto",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1010,
+    "y": 810,
+    "wires": []
+  },
+  {
+    "id": "ic_comment_status",
+    "type": "comment",
+    "z": "ic_tab",
+    "name": "Status dos servicos",
+    "info": "Chamadas HTTP simples para confirmar que os endpoints estao respondendo pela rede Docker.",
+    "x": 190,
+    "y": 940,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_status_cataloguer",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Status Cataloguer",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 160,
+    "y": 1000,
+    "wires": [
+      [
+        "ic_http_status_cataloguer"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_status_cataloguer",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET cataloguer root",
+    "method": "GET",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "http://interscity-resource-cataloguer:3000/",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 420,
+    "y": 1000,
+    "wires": [
+      [
+        "ic_dbg_status_cataloguer"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_status_cataloguer",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "Status Cataloguer HTTP",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "statusCode",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 720,
+    "y": 1000,
+    "wires": []
+  },
+  {
+    "id": "ic_inj_status_collector",
+    "type": "inject",
+    "z": "ic_tab",
+    "name": "Status Data Collector",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 170,
+    "y": 1050,
+    "wires": [
+      [
+        "ic_http_status_collector"
+      ]
+    ]
+  },
+  {
+    "id": "ic_http_status_collector",
+    "type": "http request",
+    "z": "ic_tab",
+    "name": "GET collector root",
+    "method": "GET",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "http://interscity-data-collector:3000/",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 420,
+    "y": 1050,
+    "wires": [
+      [
+        "ic_dbg_status_collector"
+      ]
+    ]
+  },
+  {
+    "id": "ic_dbg_status_collector",
+    "type": "debug",
+    "z": "ic_tab",
+    "name": "Status Data Collector",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "statusCode",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 720,
+    "y": 1050,
+    "wires": []
+  }
 ]

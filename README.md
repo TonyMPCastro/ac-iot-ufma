@@ -40,7 +40,7 @@ Projeto acadêmico desenvolvido na **UFMA** (Universidade Federal do Maranhão) 
 | **Simulador (Frontend)** | HTML + CSS + JS (Paho MQTT) | Navegador Web |
 | **Broker MQTT** | Eclipse Mosquitto 2.x | Docker |
 | **Middleware / Dashboard** | Node-RED + node-red-dashboard | Docker |
-| **Plataforma IoT** | InterSCity | API externa |
+| **Plataforma IoT** | InterSCity + bridge MQTT/REST | Docker |
 
 ---
 
@@ -55,7 +55,7 @@ ac-iot-ufma/
 │   │       └── mosquitto.conf  # Configuração do broker MQTT
 │   └── nodered/
 │       └── data/               # Volume persistente (flows.json)
-├── simulador/                  # Simulador C++ que gera 5 salas e envia MQTT
+├── simulador/                  # Simulador C++ que gera 3 salas e envia MQTT
 ├── simulador-web/              # Interface Web para simulação manual via WebSockets
 │   └── index.html
 ├── firmware/
@@ -67,7 +67,7 @@ ac-iot-ufma/
 │       ├── diagram.json        # Diagrama do circuito Wokwi
 │       └── wokwi.toml          # Config do simulador Wokwi
 ├── node-red/                   # Fluxos exportados para versionamento
-├── interscity/                 # Integração com API InterSCity
+├── interscity/                 # Bridge MQTT -> InterSCity local
 ├── ir-codes/                   # Catálogo de códigos IR por modelo de AC
 ├── tests/                      # Scripts de teste e validação
 ├── docs/                       # Documentação e diagramas
@@ -114,14 +114,20 @@ Use o **Terminal** nativo ou **iTerm2**:
 docker compose up -d --build
 ```
 
-#### Serviço InterSCity local
+#### Plataforma InterSCity local
 
-Para iniciar apenas o serviço local de integração InterSCity:
-```bash
-docker compose up -d interscity
-```
+O comando principal tambem sobe a pilha local do InterSCity: Resource Cataloguer, Resource Adaptor, Data Collector, Actuator Controller, Resource Discoverer, Kong, RabbitMQ, Mongo, Postgres e Redis.
 
-O serviço ficará disponível em `http://localhost:5000` e o Node-RED pode enviar telemetria para `http://interscity:5000/telemetry` quando estiver no mesmo Docker Compose.
+O bridge `interscity` assina `ac-iot/+/sensores`, cadastra as salas no InterSCity e encaminha a telemetria para o Resource Adaptor.
+
+Endpoints principais:
+- Resource Cataloguer: `http://localhost:3000`
+- Resource Adaptor: `http://localhost:3002`
+- Data Collector: `http://localhost:4000`
+- Actuator Controller: `http://localhost:5000`
+- Resource Discoverer: `http://localhost:3004`
+- Kong: `http://localhost:8000`
+- RabbitMQ Management: `http://localhost:15672`
 
 ---
 
@@ -146,7 +152,7 @@ O projeto agora conta com uma plataforma completa de simulação para testar a c
 
 ### 1. Simulador Automático (C++)
 
-Por padrão, ao rodar `docker compose up -d`, o contêiner `simulador` começa a rodar e envia leituras aleatórias para 3 salas diferentes a cada 60 segundos nos tópicos `ac-iot/salaXX/sensores`.
+Por padrão, ao rodar `docker compose up -d`, o contêiner `simulador` começa a rodar e envia leituras aleatórias para 3 salas diferentes a cada 20 segundos nos tópicos `ac-iot/salaXX/sensores`.
 
 Para ver os logs do simulador e as mensagens que estão sendo geradas, você pode rodar:
 
@@ -184,11 +190,9 @@ cmd /c docker compose start simulador
 
 | Tópico | Direção | Descrição |
 |---|---|---|
-| `telemetria/esp32/sala01` | Simulador → Broker | Dados gerados da Sala 01 |
-| `telemetria/esp32/sala02` | Simulador → Broker | Dados gerados da Sala 02 |
-| `telemetria/esp32/sala03` | Simulador → Broker | Dados gerados da Sala 03 |
-| `telemetria/esp32/sala04` | Simulador → Broker | Dados gerados da Sala 04 |
-| `telemetria/esp32/sala05` | Simulador → Broker | Dados gerados da Sala 05 |
+| `ac-iot/sala01/sensores` | Simulador → Broker | Dados gerados da Sala 01 |
+| `ac-iot/sala02/sensores` | Simulador → Broker | Dados gerados da Sala 02 |
+| `ac-iot/sala03/sensores` | Simulador → Broker | Dados gerados da Sala 03 |
 
 *Formato do Payload (JSON):*
 ```json
