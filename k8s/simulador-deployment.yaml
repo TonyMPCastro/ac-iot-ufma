@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simulador
+  labels:
+    app: simulador
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simulador
+  template:
+    metadata:
+      labels:
+        app: simulador
+    spec:
+      containers:
+      - name: simulador
+        image: ac-iot-ufma-simulador:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PUBLISH_INTERVAL
+          value: "20"
+        - name: INTERSCITY_URL
+          value: "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh"

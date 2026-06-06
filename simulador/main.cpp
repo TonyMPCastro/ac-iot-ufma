@@ -6,15 +6,20 @@
 #include <string>
 #include <thread>
 #include <chrono>
+#include <iomanip>
+#include <sstream>
 
-#include <mosquitto.h>
+#include <curl/curl.h>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
+// URL base do InterSCity
+static std::string INTERSCITY_URL = "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh";
+
 struct RoomConfig {
     std::string id;
-    std::string topic;
+    std::string uuid;
     std::string status;
     double setpoint;
     std::string luz;
@@ -24,19 +29,17 @@ struct RoomConfig {
     double umidade_max;
     int luz_min;
     int luz_max;
-    double temp_simulada; // Temperatura forçada via simulador web
+    double temp_simulada; // Temperatura forçada
     bool presenca; // Sensor de presença humana
     double umidade_simulada; // Forçada
     int luz_simulada; // Forçada
     std::string modo_ac; // "ativo" ou "desativado"
+    std::string last_cmd_timestamp; // Para evitar processar o mesmo comando várias vezes
 };
 
 static std::map<std::string, RoomConfig> SALAS;
 static std::mt19937_64 RNG(std::random_device{}());
-static std::string BROKER;
-static int PORT;
 static int INTERVALO;
-static struct mosquitto* MOSQ = nullptr;
 
 static std::string getenv_or(const char* key, const char* def) {
     const char* value = std::getenv(key);
@@ -51,6 +54,134 @@ static double random_double(double a, double b) {
 static int random_int(int a, int b) {
     std::uniform_int_distribution<int> dist(a, b);
     return dist(RNG);
+}
+
+static std::string get_iso8601_timestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto in_time_t = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::gmtime(&in_time_t), "%Y-%m-%dT%H:%M:%SZ");
+    return ss.str();
+}
+
+struct MemoryStruct {
+    char *memory;
+    size_t size;
+};
+
+static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp) {
+    size_t realsize = size * nmemb;
+    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+    char *ptr = (char*)realloc(mem->memory, mem->size + realsize + 1);
+    if(ptr == nullptr) return 0;
+
+    mem->memory = ptr;
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = 0;
+
+    return realsize;
+}
+
+static std::string send_http_request(const std::string& url, const std::string& method, const std::string& payload = "") {
+    CURL *curl = curl_easy_init();
+    if (!curl) return "";
+
+    struct curl_slist *headers = NULL;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    if (method == "POST") {
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
+    } else if (method == "GET") {
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+    }
+    
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+
+    struct MemoryStruct chunk;
+    chunk.memory = (char*)malloc(1);
+    chunk.size = 0;
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
+
+    CURLcode res = curl_easy_perform(curl);
+    std::string response = "";
+    if (res != CURLE_OK) {
+        std::cerr << "[ERRO] Falha na requisição " << method << " para " << url << ": " << curl_easy_strerror(res) << "\n";
+    } else {
+        long code;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
+        response = std::string(chunk.memory, chunk.size);
+        if (code >= 300) {
+            std::cerr << "[ERRO HTTP " << code << "] Resposta: " << response << "\n";
+            response = ""; // Tratar como erro
+        }
+    }
+
+    free(chunk.memory);
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+    
+    return response;
+}
+
+static void registrar_capabilities() {
+    std::vector<std::pair<std::string, std::string>> caps = {
+        {"temperatura", "sensor"},
+        {"umidade", "sensor"},
+        {"luminosidade", "sensor"},
+        {"presenca", "sensor"},
+        {"status_ac", "sensor"},
+        {"setpoint_ac", "sensor"},
+        {"status_luz", "sensor"},
+        {"modo_ac", "sensor"},
+        {"cmd_status_ac", "sensor"},
+        {"cmd_setpoint_ac", "sensor"},
+        {"cmd_status_luz", "sensor"},
+        {"cmd_modo_ac", "sensor"},
+        {"cmd_presenca", "sensor"},
+        {"cmd_temperatura", "sensor"},
+        {"cmd_umidade", "sensor"},
+        {"cmd_luminosidade", "sensor"}
+    };
+
+    std::string url = INTERSCITY_URL + "/catalog/capabilities";
+
+    for (const auto& cap : caps) {
+        json payload = {
+            {"name", cap.first},
+            {"description", "Capability gerada pelo simulador para " + cap.first},
+            {"capability_type", cap.second}
+        };
+        std::cout << "Registrando capability: " << cap.first << "\n";
+        send_http_request(url, "POST", payload.dump());
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
+static void registrar_resources() {
+    std::string url = INTERSCITY_URL + "/catalog/resources";
+
+    for (const auto& [id, sala] : SALAS) {
+        json payload = {
+            {"data", {
+                {"uuid", sala.uuid},
+                {"description", "Simulador da " + sala.id},
+                {"capabilities", json::array({"temperatura", "umidade", "luminosidade", "presenca", "status_ac", "setpoint_ac", "status_luz", "modo_ac", "cmd_status_ac", "cmd_setpoint_ac", "cmd_status_luz", "cmd_modo_ac", "cmd_presenca", "cmd_temperatura", "cmd_umidade", "cmd_luminosidade"})},
+                {"status", "active"},
+                {"lat", -2.5307},
+                {"lon", -44.3068}
+            }}
+        };
+        std::cout << "Registrando resource: " << sala.id << " (UUID: " << sala.uuid << ")\n";
+        send_http_request(url, "POST", payload.dump());
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
 }
 
 static json gerar_dados(const RoomConfig& sala) {
@@ -74,216 +205,161 @@ static json gerar_dados(const RoomConfig& sala) {
             : random_int(5, 50);
     }
 
-    return json{
-        {"id_sala", sala.id},
-        {"status_ac", sala.status},
-        {"setpoint_ac", sala.setpoint},
-        {"status_luz", sala.luz},
-        {"temperatura", std::round(temperatura * 100.0) / 100.0},
-        {"umidade", std::round(umidade * 100.0) / 100.0},
-        {"luminosidade", luminosidade},
-        {"presenca", sala.presenca},
-        {"modo_ac", sala.modo_ac},
-        {"timestamp", static_cast<long>(std::time(nullptr))}
+    std::string ts = get_iso8601_timestamp();
+
+    json data = {
+        {"temperatura", json::array({{{"timestamp", ts}, {"value", static_cast<int>(std::round(temperatura))}}})},
+        {"umidade", json::array({{{"timestamp", ts}, {"value", static_cast<int>(std::round(umidade))}}})},
+        {"luminosidade", json::array({{{"timestamp", ts}, {"value", luminosidade}}})},
+        {"presenca", json::array({{{"timestamp", ts}, {"value", sala.presenca ? 1 : 0}}})},
+        {"status_ac", json::array({{{"timestamp", ts}, {"value", sala.status}}})},
+        {"setpoint_ac", json::array({{{"timestamp", ts}, {"value", sala.setpoint}}})},
+        {"status_luz", json::array({{{"timestamp", ts}, {"value", sala.luz}}})},
+        {"modo_ac", json::array({{{"timestamp", ts}, {"value", sala.modo_ac}}})}
     };
+
+    return json{{"data", data}};
 }
 
-static void publish_room(const RoomConfig& sala) {
-    json dados = gerar_dados(sala);
-    std::string payload = dados.dump();
-    int ret = mosquitto_publish(MOSQ, nullptr, sala.topic.c_str(), static_cast<int>(payload.size()), payload.c_str(), 0, true);
-    if (ret != MOSQ_ERR_SUCCESS) {
-        std::cerr << "Falha ao publicar mensagem MQTT para " << sala.topic << ": " << mosquitto_strerror(ret) << "\n";
-    }
-}
+static void poll_commands_for_room(RoomConfig& sala) {
+    std::string url = INTERSCITY_URL + "/collector/resources/" + sala.uuid + "/data/last";
+    std::string response = send_http_request(url, "GET");
+    if (response.empty()) return;
 
-static void publish_all_rooms() {
-    for (const auto& [id, sala] : SALAS) {
-        publish_room(sala);
-    }
-}
-
-static void on_connect(struct mosquitto* mosq, void* userdata, int rc) {
-    if (rc == 0) {
-        std::cout << "Conectado ao Broker MQTT em " << BROKER << ":" << PORT << "\n";
-        mosquitto_subscribe(mosq, nullptr, "ac-iot/+/comando", 0);
-        mosquitto_subscribe(mosq, nullptr, "ac-iot/all/comando", 0);
-        std::cout << "Inscrito em ac-iot/+/comando e ac-iot/all/comando\n";
-        publish_all_rooms();
-    } else {
-        std::cerr << "Falha de conexão MQTT: rc=" << rc << "\n";
-    }
-}
-
-static void on_message(struct mosquitto* mosq, void* userdata, const struct mosquitto_message* message) {
     try {
-        if (!message || !message->payload || message->payloadlen <= 0) {
-            return;
+        json j = json::parse(response);
+        if (!j.contains("resources") || !j["resources"].is_array() || j["resources"].empty()) return;
+
+        json res_obj = j["resources"][0];
+        if (!res_obj.contains("capabilities")) return;
+
+        json caps = res_obj["capabilities"];
+        std::string latest_timestamp = "";
+        
+        // Função auxiliar para extrair comando
+        auto extrair_cmd = [&](const std::string& cap_name, auto& target_var, auto parser) {
+            if (caps.contains(cap_name) && caps[cap_name].is_array() && !caps[cap_name].empty()) {
+                json leitura = caps[cap_name][0];
+                std::string ts = leitura["timestamp"].get<std::string>();
+                if (ts > sala.last_cmd_timestamp) {
+                    try {
+                        target_var = parser(leitura["value"]);
+                        if (ts > latest_timestamp) latest_timestamp = ts;
+                        std::cout << "[COMANDO] " << sala.id << " -> " << cap_name << " atualizado.\n";
+                    } catch (...) {}
+                }
+            }
+        };
+
+        // Parsers
+        auto parse_str = [](const json& val) { return val.get<std::string>(); };
+        auto parse_double = [](const json& val) { 
+            if (val.is_number()) return val.get<double>(); 
+            if (val.is_string()) return std::stod(val.get<std::string>());
+            return 0.0;
+        };
+        auto parse_bool = [](const json& val) { 
+            if (val.is_boolean()) return val.get<bool>();
+            if (val.is_number()) return val.get<int>() != 0;
+            if (val.is_string()) return val.get<std::string>() == "true" || val.get<std::string>() == "1";
+            return false;
+        };
+
+        extrair_cmd("cmd_status_ac", sala.status, parse_str);
+        extrair_cmd("cmd_setpoint_ac", sala.setpoint, parse_double);
+        extrair_cmd("cmd_status_luz", sala.luz, parse_str);
+        extrair_cmd("cmd_modo_ac", sala.modo_ac, parse_str);
+        extrair_cmd("cmd_presenca", sala.presenca, parse_bool);
+        extrair_cmd("cmd_temperatura", sala.temp_simulada, parse_double);
+        extrair_cmd("cmd_umidade", sala.umidade_simulada, parse_double);
+        
+        auto parse_int = [](const json& val) {
+            if (val.is_number()) return val.get<int>();
+            if (val.is_string()) return std::stoi(val.get<std::string>());
+            return 0;
+        };
+        extrair_cmd("cmd_luminosidade", sala.luz_simulada, parse_int);
+
+        if (!latest_timestamp.empty() && latest_timestamp > sala.last_cmd_timestamp) {
+            sala.last_cmd_timestamp = latest_timestamp;
         }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "Erro ao fazer parse dos comandos: " << e.what() << "\n";
+    }
+}
 
-        std::string payload(reinterpret_cast<const char*>(message->payload), message->payloadlen);
-        json dados = json::parse(payload);
-        std::string topic = message->topic ? message->topic : "";
-        std::vector<std::string> partes;
-        std::string alvo;
-        {
-            size_t start = 0;
-            size_t end;
-            while ((end = topic.find('/', start)) != std::string::npos) {
-                partes.push_back(topic.substr(start, end - start));
-                start = end + 1;
-            }
-            if (start < topic.size()) partes.push_back(topic.substr(start));
-        }
-
-        if (partes.size() >= 2) {
-            alvo = partes[1];
-        }
-
-        if (alvo.empty()) {
-            return;
-        }
-
-        std::vector<std::string> salas_para_atualizar;
-        if (alvo == "all") {
-            for (const auto& [id, sala] : SALAS) {
-                salas_para_atualizar.push_back(id);
-            }
-        } else if (SALAS.count(alvo)) {
-            salas_para_atualizar.push_back(alvo);
-        }
-
-        for (const auto& id_sala : salas_para_atualizar) {
-            auto& sala = SALAS[id_sala];
-            bool mudou = false;
-
-            if (dados.contains("comando") && dados["comando"].is_string()) {
-                std::string cmd = dados["comando"].get<std::string>();
-                if (cmd == "ligar" || cmd == "desligar") {
-                    std::string novo_status = (cmd == "ligar") ? "ligado" : "desligado";
-                    if (sala.status != novo_status) {
-                        sala.status = novo_status;
-                        mudou = true;
-                    }
-                }
-            }
-
-            if (dados.contains("setpoint")) {
-                try {
-                    sala.setpoint = dados["setpoint"].get<double>();
-                    mudou = true;
-                } catch (...) {
-                }
-            }
-
-            if (dados.contains("luz") && dados["luz"].is_string()) {
-                std::string cmd_luz = dados["luz"].get<std::string>();
-                if (cmd_luz == "ligar" || cmd_luz == "desligar") {
-                    std::string novo_status_luz = (cmd_luz == "ligar") ? "ligado" : "desligado";
-                    if (sala.luz != novo_status_luz) {
-                        sala.luz = novo_status_luz;
-                        mudou = true;
-                    }
-                }
-            }
-
-            if (dados.contains("temperatura")) {
-                try {
-                    sala.temp_simulada = dados["temperatura"].get<double>();
-                    mudou = true;
-                } catch (...) {
-                }
-            }
-
-            if (dados.contains("presenca")) {
-                try {
-                    sala.presenca = dados["presenca"].get<bool>();
-                    mudou = true;
-                } catch (...) {
-                }
-            }
-
-            if (dados.contains("umidade")) {
-                try {
-                    sala.umidade_simulada = dados["umidade"].get<double>();
-                    mudou = true;
-                } catch (...) {
-                }
-            }
-
-            if (dados.contains("luminosidade")) {
-                try {
-                    sala.luz_simulada = dados["luminosidade"].get<int>();
-                    mudou = true;
-                } catch (...) {
-                }
-            }
-
-            if (dados.contains("modo_ac") && dados["modo_ac"].is_string()) {
-                std::string modo = dados["modo_ac"].get<std::string>();
-                if (modo == "ativo" || modo == "desativado") {
-                    if (sala.modo_ac != modo) {
-                        sala.modo_ac = modo;
-                        mudou = true;
-                    }
-                }
-            }
-
-            if (mudou) {
-                std::cout << "[COMANDO] " << id_sala << " atualizado: AC=" << sala.status
-                          << ", Setpoint=" << sala.setpoint << "°C, Luz=" << sala.luz << "\n";
-            }
-
-            publish_room(sala);
-        }
-    } catch (const std::exception& exc) {
-        std::cerr << "Erro ao processar mensagem MQTT: " << exc.what() << "\n";
+static void process_all_rooms() {
+    for (auto& [id, sala] : SALAS) {
+        // 1. Consulta novos comandos no Collector
+        poll_commands_for_room(sala);
+        
+        // 2. Publica o estado atualizado no Adaptor
+        json payload = gerar_dados(sala);
+        std::string url = INTERSCITY_URL + "/adaptor/resources/" + sala.uuid + "/data";
+        
+        std::cout << "[" << get_iso8601_timestamp() << "] Enviando dados da sala " << id << "...\n";
+        send_http_request(url, "POST", payload.dump());
+        
+        // Rate limiting de 50ms (20 req/s máximo) para não derrubar o Kong
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
 int main() {
-    BROKER = getenv_or("MQTT_BROKER", "mosquitto");
-    PORT = std::atoi(getenv_or("MQTT_PORT", "1883").c_str());
     INTERVALO = std::atoi(getenv_or("PUBLISH_INTERVAL", "60").c_str());
     if (INTERVALO <= 0) INTERVALO = 20;
 
-    SALAS = {
-        {"sala01", {"sala01", "ac-iot/sala01/sensores", "ligado", 22.0, "desligado", 20.0, 25.0, 40.0, 50.0, 300, 500, 0.0, false, 0.0, -1, "ativo"}},
-        {"sala02", {"sala02", "ac-iot/sala02/sensores", "ligado", 24.0, "desligado", 25.0, 35.0, 50.0, 70.0, 800, 1000, 0.0, false, 0.0, -1, "ativo"}},
-        {"sala03", {"sala03", "ac-iot/sala03/sensores", "ligado", 23.0, "desligado", 22.0, 28.0, 45.0, 60.0, 100, 800, 0.0, false, 0.0, -1, "ativo"}}
-    };
-
-    mosquitto_lib_init();
-    MOSQ = mosquitto_new("simulador_esp32_multisala", true, nullptr);
-    if (!MOSQ) {
-        std::cerr << "Falha ao criar cliente MQTT\n";
-        return EXIT_FAILURE;
+    std::string custom_url = getenv_or("INTERSCITY_URL", "");
+    if (!custom_url.empty()) {
+        INTERSCITY_URL = custom_url;
     }
 
-    mosquitto_connect_callback_set(MOSQ, on_connect);
-    mosquitto_message_callback_set(MOSQ, on_message);
-
-    while (true) {
-        int rc = mosquitto_connect(MOSQ, BROKER.c_str(), PORT, 60);
-        if (rc == MOSQ_ERR_SUCCESS) {
-            break;
-        }
-        std::cerr << "Erro ao conectar em " << BROKER << ":" << PORT << " -> " << mosquitto_strerror(rc)
-                  << ". Tentando novamente em 5 segundos...\n";
-        std::this_thread::sleep_for(std::chrono::seconds(5));
+    SALAS.clear();
+    for (int i = 1; i <= 10; ++i) {
+        char id_buf[16];
+        snprintf(id_buf, sizeof(id_buf), "sala%03d", i);
+        char uuid_buf[64];
+        snprintf(uuid_buf, sizeof(uuid_buf), "00000000-0000-0000-0000-%012d", i);
+        
+        RoomConfig sala;
+        sala.id = id_buf;
+        sala.uuid = uuid_buf;
+        sala.status = "ligado";
+        sala.setpoint = random_double(20.0, 24.0);
+        sala.luz = "desligado";
+        sala.temp_min = 20.0;
+        sala.temp_max = 28.0;
+        sala.umidade_min = 40.0;
+        sala.umidade_max = 70.0;
+        sala.luz_min = 100;
+        sala.luz_max = 1000;
+        sala.temp_simulada = 0.0;
+        sala.presenca = false;
+        sala.umidade_simulada = 0.0;
+        sala.luz_simulada = -1;
+        sala.modo_ac = "ativo";
+        sala.last_cmd_timestamp = "";
+        
+        SALAS[sala.id] = sala;
     }
 
-    mosquitto_loop_start(MOSQ);
-    std::cout << "Iniciando simulação MQTT. Publicando a cada " << INTERVALO << " segundos...\n";
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    std::cout << "Inicializando integração com InterSCity...\n";
+    std::cout << "URL: " << INTERSCITY_URL << "\n";
+    
+    registrar_capabilities();
+    registrar_resources();
+
+    std::cout << "Iniciando simulação. Verificando comandos e publicando a cada " << INTERVALO << " segundos...\n";
 
     bool running = true;
     while (running) {
-        publish_all_rooms();
+        process_all_rooms();
         std::this_thread::sleep_for(std::chrono::seconds(INTERVALO));
     }
 
-    mosquitto_loop_stop(MOSQ, true);
-    mosquitto_destroy(MOSQ);
-    mosquitto_lib_cleanup();
+    curl_global_cleanup();
     return EXIT_SUCCESS;
 }

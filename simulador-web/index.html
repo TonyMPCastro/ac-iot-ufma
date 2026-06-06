@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AC-IoT Smart Control Panel</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <title>AC-IoT Smart Control Panel (200 Salas)</title>
     <style>
         :root {
             --bg: #0f172a;
@@ -36,11 +35,12 @@
             background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 30px;
+            text-align: center;
         }
 
         .status-bar {
             width: 100%;
-            max-width: 1100px;
+            max-width: 800px;
             background: var(--card);
             padding: 12px 24px;
             border-radius: 12px;
@@ -66,28 +66,45 @@
             box-shadow: 0 0 8px var(--accent);
         }
 
-        .dashboard {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-            gap: 24px;
+        .dashboard-container {
             width: 100%;
-            max-width: 1100px;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .selector-box {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            justify-content: space-between;
+        }
+
+        select {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            background: #0f172a;
+            color: var(--text);
+            border: 1px solid var(--primary);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
         }
 
         .sala-card {
             background: var(--card);
-            border: 1px solid var(--border);
+            border: 1px solid var(--primary);
             border-radius: 16px;
-            padding: 20px;
-            transition: all 0.3s ease;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-        }
-
-        .sala-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary);
+            gap: 20px;
         }
 
         .sala-header {
@@ -95,40 +112,43 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid var(--border);
-            padding-bottom: 12px;
+            padding-bottom: 16px;
         }
 
         .sala-name {
-            font-weight: 700;
-            font-size: 1.2rem;
+            font-weight: 800;
+            font-size: 1.5rem;
             color: #fff;
         }
 
         .sala-time {
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             color: var(--text-dim);
             background: #0f172a;
-            padding: 4px 8px;
+            padding: 6px 12px;
             border-radius: 6px;
+            margin-top: 4px;
+            display: inline-block;
         }
 
         .section-title {
-            font-size: 0.75rem;
+            font-size: 0.85rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--text-dim);
-            margin-bottom: 8px;
+            margin-bottom: 12px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
+            font-weight: 700;
         }
 
         .monitor-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
             background: rgba(15, 23, 42, 0.4);
-            padding: 12px;
+            padding: 16px;
             border-radius: 12px;
         }
 
@@ -136,22 +156,29 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
 
         .monitor-item label {
-            font-size: 0.7rem;
+            font-size: 0.75rem;
             color: var(--text-dim);
         }
 
         .monitor-item span {
-            font-weight: 600;
-            font-size: 1rem;
+            font-weight: 700;
+            font-size: 1.2rem;
         }
 
         .controls-grid {
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 16px;
+            background: rgba(15, 23, 42, 0.4);
+            padding: 16px;
+            border-radius: 12px;
         }
 
         .control-row {
@@ -163,8 +190,8 @@
         .control-label {
             display: flex;
             justify-content: space-between;
-            font-size: 0.85rem;
-            font-weight: 500;
+            font-size: 0.95rem;
+            font-weight: 600;
         }
 
         .control-label b {
@@ -180,23 +207,23 @@
         .button-group {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
+            gap: 12px;
         }
 
         .btn {
-            padding: 10px;
-            border-radius: 8px;
+            padding: 14px;
+            border-radius: 10px;
             border: 1px solid var(--border);
             background: #0f172a;
             color: var(--text);
-            font-size: 0.85rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 8px;
         }
 
         .btn:hover {
@@ -215,22 +242,9 @@
             color: var(--accent);
         }
 
-        .btn-apply {
-            background: var(--primary);
-            color: #fff;
-            border: none;
-            margin-top: 10px;
-            width: 100%;
-        }
-
-        .btn-apply:hover {
-            filter: brightness(1.2);
-            transform: scale(1.02);
-        }
-
         .console-box {
             width: 100%;
-            max-width: 1100px;
+            max-width: 800px;
             margin-top: 30px;
             background: #020617;
             border: 1px solid var(--border);
@@ -260,7 +274,7 @@
             right: 20px;
             background: var(--accent);
             color: #fff;
-            padding: 12px 24px;
+            padding: 16px 24px;
             border-radius: 8px;
             font-weight: 600;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
@@ -272,97 +286,156 @@
         .toast.show {
             transform: translateY(0);
         }
+        
+        .global-controls {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
     </style>
 </head>
 <body>
 
-    <h1>AC-IoT Smart Control</h1>
+    <h1>AC-IoT Smart Control (200 Salas)</h1>
 
     <div id="statusWrapper" class="status-bar">
         <div class="status-dot"></div>
-        <span id="statusText">Conectando ao Broker...</span>
+        <span id="statusText">Conectando ao InterSCity...</span>
+        <span id="pollStatus" style="margin-left:auto; color:var(--text-dim); font-size:0.8rem;"></span>
     </div>
 
-    <div class="global-controls" style="width:100%; max-width:1100px; background:var(--card); padding:20px; border-radius:16px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-direction:column; gap:20px;">
+    <!-- Comandos Globais em Lote -->
+    <div class="global-controls">
+        <div class="section-title">🌍 Comandos Globais em Lote (200 Salas)</div>
+        <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:12px;">Aviso: Enviar comandos globais fará com que o sistema coloque as requisições em fila para evitar sobrecarga.</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+            <div class="button-group" style="grid-column: span 2;">
+                <button class="btn active-ac" onclick="enviarComandoGlobal({modo_ac: 'ativo'})">🛡️ MODO AUTO: Ativar Todas</button>
+                <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal({modo_ac: 'desativado', status_ac: 'desligado'})">Desativar Todas</button>
+            </div>
+            <div class="button-group" style="grid-column: span 2;">
+                <button class="btn active-ac" onclick="enviarComandoGlobal({status_ac: 'ligado'})">❄️ AC: Ligar Todas</button>
+                <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal({status_ac: 'desligado'})">AC: Desligar Todas</button>
+            </div>
+            <div class="button-group" style="grid-column: span 2;">
+                <button class="btn active-luz" onclick="enviarComandoGlobal({status_luz: 'ligado'})">💡 LUZ: Ligar Todas</button>
+                <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal({status_luz: 'desligado'})">LUZ: Desligar Todas</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-container">
         
-        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
-            <div class="global-group">
-                <div class="section-title">🛡️ Modo da Sala</div>
-                <div class="button-group">
-                    <button class="btn btn-apply" onclick="enviarComandoGlobalExt({modo_ac: 'ativo'})">Ativar Todas</button>
-                    <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobalExt({modo_ac: 'desativado', comando: 'desligar'})">Desativar Todas</button>
+        <div class="selector-box">
+            <div style="font-weight:700; font-size:1.2rem;">Monitor:</div>
+            <select id="salaSelector" onchange="selecionarSala()"></select>
+            <button class="btn active-ac" onclick="forcarAtualizacao()" style="padding:10px 16px;">🔄 Atualizar Agora</button>
+        </div>
+
+        <div class="sala-card" id="cardSala">
+            <div class="sala-header">
+                <div>
+                    <span class="sala-name" id="ui_title">SALA ---</span><br>
+                    <span class="sala-time" id="ui_time">Ultima att: --:--:--</span>
+                </div>
+                <div id="ui_badge" style="background:var(--primary); color:#fff; padding:6px 16px; border-radius:20px; font-size:0.8rem; font-weight:700; text-transform:uppercase;">ATIVO</div>
+            </div>
+
+            <div class="monitor-section">
+                <div class="section-title">📊 Sensores (Leitura Real)</div>
+                <div class="monitor-grid">
+                    <div class="monitor-item">
+                        <label>Temperatura</label>
+                        <span id="ui_temp">--°C</span>
+                    </div>
+                    <div class="monitor-item">
+                        <label>Umidade</label>
+                        <span id="ui_umi">--%</span>
+                    </div>
+                    <div class="monitor-item">
+                        <label>Luminosidade</label>
+                        <span id="ui_lux">--lx</span>
+                    </div>
+                    <div class="monitor-item">
+                        <label>Luz Atual</label>
+                        <span id="ui_stat_luz">--</span>
+                    </div>
+                    <div class="monitor-item">
+                        <label>Presença Humana</label>
+                        <span id="ui_pres">--</span>
+                    </div>
+                    <div class="monitor-item">
+                        <label>Status Ar Condicionado</label>
+                        <span id="ui_stat_ac">--</span>
+                    </div>
                 </div>
             </div>
-            <div class="global-group">
-                <div class="section-title">❄️ Ar Condicionado</div>
-                <div class="button-group">
-                    <button class="btn btn-apply" onclick="enviarComandoGlobal('comando', 'ligar')">Ligar Todos</button>
-                    <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal('comando', 'desligar')">Desligar Todos</button>
-                </div>
-            </div>
-            <div class="global-group">
-                <div class="section-title">💡 Iluminação</div>
-                <div class="button-group">
-                    <button class="btn active-luz" onclick="enviarComandoGlobal('luz', 'ligar')">Ligar Todas</button>
-                    <button class="btn" style="border-color:var(--danger); color:var(--danger);" onclick="enviarComandoGlobal('luz', 'desligar')">Desligar Todas</button>
+
+            <div class="controls-section">
+                <div class="section-title">🎮 Controle & Simulação Rápida</div>
+                <div class="controls-grid">
+                    
+                    <div class="button-group" style="margin-bottom:12px; grid-template-columns: 1fr;">
+                        <button id="btn_modo" class="btn active-ac" onclick="toggleModo()">🛡️ MODO DA SALA: ATIVO</button>
+                    </div>
+                    <div class="button-group" style="margin-bottom:16px;">
+                        <button id="btn_ac" class="btn" onclick="toggleAC()">❄️ AC: OFF</button>
+                        <button id="btn_luz" class="btn" onclick="toggleLuz()">💡 LUZ: OFF</button>
+                    </div>
+
+                    <div style="border-top:1px solid var(--border); padding-top:16px;"></div>
+
+                    <div class="control-row">
+                        <div class="control-label">Setpoint AC Real: <b id="lbl_set">22</b>°C</div>
+                        <input type="range" id="inp_set" min="16" max="30" value="22" step="1" 
+                            oninput="document.getElementById('lbl_set').innerText = this.value"
+                            onchange="enviarComandoUi('setpoint_ac', parseFloat(this.value))">
+                    </div>
+
+                    <div class="control-row">
+                        <div class="control-label">Forçar Sensor Temp: <b id="lbl_sim_temp">25</b>°C <span style="font-size:0.7rem;font-weight:400;color:var(--text-dim)">(0=Auto)</span></div>
+                        <input type="range" id="inp_sim_temp" min="0" max="45" value="0" step="1" 
+                            oninput="document.getElementById('lbl_sim_temp').innerText = this.value"
+                            onchange="enviarComandoUi('temperatura', parseInt(this.value))">
+                    </div>
+
+                    <div class="control-row">
+                        <div class="control-label">Forçar Sensor Umid: <b id="lbl_sim_umi">50</b>% <span style="font-size:0.7rem;font-weight:400;color:var(--text-dim)">(0=Auto)</span></div>
+                        <input type="range" id="inp_sim_umi" min="0" max="100" value="0" step="1" 
+                            oninput="document.getElementById('lbl_sim_umi').innerText = this.value"
+                            onchange="enviarComandoUi('umidade', parseInt(this.value))">
+                    </div>
+
+                    <div class="control-row">
+                        <div class="control-label">Forçar Sensor Luz: <b id="lbl_sim_lux">-1</b> lx <span style="font-size:0.7rem;font-weight:400;color:var(--text-dim)">(-1=Auto)</span></div>
+                        <input type="range" id="inp_sim_lux" min="-1" max="1500" value="-1" step="10" 
+                            oninput="document.getElementById('lbl_sim_lux').innerText = this.value"
+                            onchange="enviarComandoUi('luminosidade', parseInt(this.value))">
+                    </div>
+
+                    <div class="control-row" style="margin-top:8px;">
+                        <label style="display:flex; align-items:center; gap:10px; font-weight:600; cursor:pointer;">
+                            <input type="checkbox" id="inp_sim_pres" style="width:20px; height:20px; accent-color:var(--primary);" onchange="enviarComandoUi('presenca', this.checked)">
+                            Forçar Detecção de Presença
+                        </label>
+                    </div>
+
                 </div>
             </div>
         </div>
 
-        <div style="border-top:1px solid var(--border); padding-top:16px;">
-            <div class="section-title" style="margin-bottom:10px;">🌡️ Setpoint AC (Global)</div>
-            <div style="display:flex; align-items:center; gap:16px;">
-                <div class="control-label">Setpoint: <b id="lbl_global_set">22</b>°C</div>
-                <input type="range" min="16" max="30" value="22" step="1" style="flex:1;"
-                    oninput="updateLabel('lbl_global_set', this.value)"
-                    onchange="enviarComandoGlobal('setpoint', parseFloat(this.value))">
-            </div>
-        </div>
-
-        <div style="border-top:1px solid var(--border); padding-top:16px;">
-            <div class="section-title" style="margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-                <span>🌍 Simulação Rápida (Sensores)</span>
-                <select id="sim_target" style="padding:6px; border-radius:6px; background:#0f172a; color:var(--text); border:1px solid var(--border); font-size:0.85rem; font-weight:600;">
-                    <option value="all">Todas as Salas</option>
-                    <option value="sala01">Sala 01</option>
-                    <option value="sala02">Sala 02</option>
-                    <option value="sala03">Sala 03</option>
-                </select>
-            </div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
-                <div class="control-row">
-                    <div class="control-label">Temperatura: <b id="lbl_global_temp">25</b>°C</div>
-                    <input type="range" min="10" max="45" value="25" step="0.5" 
-                        oninput="updateLabel('lbl_global_temp', this.value)"
-                        onchange="enviarComandoSimulador('temperatura', parseFloat(this.value))">
-                </div>
-                <div class="control-row">
-                    <div class="control-label">Umidade: <b id="lbl_global_umi">50</b>%</div>
-                    <input type="range" min="0" max="100" value="50" step="1" 
-                        oninput="updateLabel('lbl_global_umi', this.value)"
-                        onchange="enviarComandoSimulador('umidade', parseFloat(this.value))">
-                </div>
-                <div class="control-row">
-                    <div class="control-label">Luz (lux): <b id="lbl_global_lux">500</b></div>
-                    <input type="range" min="0" max="1500" value="500" step="10" 
-                        oninput="updateLabel('lbl_global_lux', this.value)"
-                        onchange="enviarComandoSimulador('luminosidade', parseInt(this.value))">
-                </div>
-                <div class="control-row" style="display:flex; align-items:center; padding-top:10px;">
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; font-weight:500; cursor:pointer;">
-                        <input type="checkbox" style="width:18px; height:18px; accent-color:var(--primary);" onchange="enviarComandoSimulador('presenca', this.checked)">
-                        Forçar Presença
-                    </label>
-                </div>
-            </div>
-        </div>
     </div>
-
-    <div class="dashboard" id="salasContainer"></div>
 
     <div class="console-box">
         <div class="console-header">
-            <span>📟 MQTT MONITOR (Comandos)</span>
+            <span>📟 LOG DE EVENTOS</span>
             <button onclick="document.getElementById('debugLog').innerHTML=''" style="background:none; border:1px solid var(--border); color:var(--text-dim); cursor:pointer; border-radius:4px; padding:2px 8px;">Limpar</button>
         </div>
         <div id="debugLog"></div>
@@ -371,384 +444,228 @@
     <div id="toast" class="toast">Mensagem enviada!</div>
 
     <script>
-        const mqttBroker = window.location.hostname || "localhost";
-        const mqttPort = 9001;
-        const clientId = "web_panel_" + Math.random().toString(16).substr(2, 8);
-        let mqttClient = null;
-
-        // Lista dinâmica de salas (preenchida automaticamente via descoberta MQTT)
-        const salasAtivas = new Set();
-        const state = {};
-
-        function createSalaCard(id) {
-            if (salasAtivas.has(id)) return;
-            salasAtivas.add(id);
-            state[id] = { ac: 'desligado', setpoint: 22, luz: 'desligado' };
-
-            const container = document.getElementById('salasContainer');
-            const card = document.createElement('div');
-            card.className = 'sala-card';
-            card.id = `card_${id}`;
-            card.innerHTML = `
-                <div class="sala-header">
-                    <div style="display:flex; flex-direction:column;">
-                        <span class="sala-name">${id.toUpperCase()}</span>
-                        <span class="sala-time" id="time_${id}">--:--:--</span>
-                    </div>
-                    <div id="badge_${id}" class="status-badge" style="background:var(--primary); color:#fff; padding:4px 10px; border-radius:20px; font-size:0.7rem; font-weight:700; transition:all 0.3s;">ATIVO</div>
-                </div>
-
-                <div class="monitor-section">
-                    <div class="section-title">📊 Monitoramento</div>
-                    <div class="monitor-grid">
-                        <div class="monitor-item">
-                            <label>Temperatura</label>
-                            <span id="temp_${id}">--°C</span>
-                        </div>
-                        <div class="monitor-item">
-                            <label>Umidade</label>
-                            <span id="umi_${id}">--%</span>
-                        </div>
-                        <div class="monitor-item">
-                            <label>Luminosidade</label>
-                            <span id="luz_${id}">--lx</span>
-                        </div>
-                        <div class="monitor-item">
-                            <label>Luz</label>
-                            <span id="stat_luz_${id}" style="font-weight:700;">--</span>
-                        </div>
-                        <div class="monitor-item">
-                            <label>Presença</label>
-                            <span id="pres_${id}">--</span>
-                        </div>
-                        <div class="monitor-item">
-                            <label>Ar Condicionado</label>
-                            <span id="stat_${id}" style="font-weight:700;">--</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="controls-section">
-                    <div class="section-title">🎮 Atuadores</div>
-                    <div class="controls-grid">
-                        <div class="control-row">
-                            <div class="control-label">Setpoint AC: <b id="lbl_set_${id}">22</b>°C</div>
-                            <input type="range" id="set_${id}" min="16" max="30" value="22" step="1" 
-                                oninput="updateLabel('lbl_set_${id}', this.value)"
-                                onchange="enviarComandoIndividual('${id}', 'setpoint', parseFloat(this.value))">
-                        </div>
-
-                        <div class="control-row">
-                            <div class="control-label">Temp. Sala (Sensor): <b id="lbl_sim_temp_${id}">25</b>°C</div>
-                            <input type="range" id="sim_temp_${id}" min="10" max="45" value="25" step="0.5" 
-                                oninput="updateLabel('lbl_sim_temp_${id}', this.value)"
-                                onchange="enviarComandoIndividual('${id}', 'temperatura', parseFloat(this.value))">
-                        </div>
-
-                        <div class="control-row">
-                            <div class="control-label">Umidade (Sensor): <b id="lbl_sim_umi_${id}">50</b>%</div>
-                            <input type="range" id="sim_umi_${id}" min="0" max="100" value="50" step="1" 
-                                oninput="updateLabel('lbl_sim_umi_${id}', this.value)"
-                                onchange="enviarComandoIndividual('${id}', 'umidade', parseFloat(this.value))">
-                        </div>
-
-                        <div class="control-row">
-                            <div class="control-label">Luminosidade (Sensor): <b id="lbl_sim_lux_${id}">500</b> lx</div>
-                            <input type="range" id="sim_lux_${id}" min="0" max="1500" value="500" step="10" 
-                                oninput="updateLabel('lbl_sim_lux_${id}', this.value)"
-                                onchange="enviarComandoIndividual('${id}', 'luminosidade', parseInt(this.value))">
-                        </div>
-
-                        <div class="control-row">
-                            <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; font-weight:500; cursor:pointer; margin-top:4px;">
-                                <input type="checkbox" id="sim_pres_${id}" style="width:18px; height:18px; accent-color:var(--primary);" onchange="enviarComandoIndividual('${id}', 'presenca', this.checked)">
-                                Simular Presença Humana
-                            </label>
-                        </div>
-                        
-                        <div class="button-group" style="margin-bottom: 12px;">
-                            <button id="btn_modo_${id}" class="btn active-ac" onclick="toggleModo('${id}')" style="width: 100%;">🛡️ MODO DA SALA: ATIVO</button>
-                        </div>
-                        <div class="button-group">
-                            <button id="btn_ac_${id}" class="btn" onclick="toggleAC('${id}')">❄️ AC: OFF</button>
-                            <button id="btn_luz_${id}" class="btn" onclick="toggleLuz('${id}')">💡 Luz: OFF</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            container.appendChild(card);
+        const interscityUrl = "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh";
+        const totalSalas = 10;
+        
+        // Gerar 200 UUIDs estáticos seguindo o padrão que fizemos no C++
+        const uuids = {};
+        for(let i=1; i<=totalSalas; i++) {
+            const id = 'sala' + i.toString().padStart(3, '0');
+            const uuid = '00000000-0000-0000-0000-' + i.toString().padStart(12, '0');
+            uuids[id] = uuid;
         }
 
-        function updateLabel(id, val) { document.getElementById(id).innerText = val; }
+        let salaSelecionada = 'sala001';
+        let currentState = {
+            modo_ac: 'ativo',
+            ac: 'desligado',
+            luz: 'desligado'
+        };
 
-        function toggleModo(id) {
-            const isAtivo = state[id].modo_ac !== 'desativado';
-            const novoModo = isAtivo ? 'desativado' : 'ativo';
-            state[id].modo_ac = novoModo;
-            
-            const btn = document.getElementById(`btn_modo_${id}`);
-            btn.innerText = `🛡️ MODO DA SALA: ${novoModo === 'ativo' ? 'ATIVO (Auto)' : 'DESATIVADO'}`;
-            btn.classList.toggle('active-ac', novoModo === 'ativo');
-            btn.style.borderColor = novoModo === 'ativo' ? 'var(--primary)' : 'var(--danger)';
-            btn.style.color = novoModo === 'ativo' ? 'var(--primary)' : 'var(--danger)';
-            
-            if (novoModo === 'desativado') {
-                state[id].ac = 'desligado';
-                const btnAc = document.getElementById(`btn_ac_${id}`);
-                if (btnAc) {
-                    btnAc.innerText = '❄️ AC: OFF';
-                    btnAc.classList.remove('active-ac');
-                }
-                const statEl = document.getElementById(`stat_${id}`);
-                if (statEl) {
-                    statEl.innerText = 'DESLIGADO';
-                    statEl.style.color = 'var(--danger)';
-                }
-                const badgeEl = document.getElementById(`badge_${id}`);
-                if (badgeEl) {
-                    badgeEl.innerText = 'DESATIVADO';
-                    badgeEl.style.background = 'var(--danger)';
-                    badgeEl.style.boxShadow = 'none';
-                }
-                document.getElementById(`card_${id}`).style.borderColor = 'var(--border)';
-                
-                enviarComandoIndividualExt(id, { modo_ac: 'desativado', comando: 'desligar' });
-            } else {
-                const badgeEl = document.getElementById(`badge_${id}`);
-                if (badgeEl) {
-                    badgeEl.innerText = 'ATIVO';
-                    badgeEl.style.background = 'var(--primary)';
-                    badgeEl.style.boxShadow = '0 0 10px var(--primary)';
-                }
-                document.getElementById(`card_${id}`).style.borderColor = 'var(--primary)';
-                
-                enviarComandoIndividualExt(id, { modo_ac: 'ativo' });
+        function formatarData() {
+            return new Date().toLocaleTimeString();
+        }
+
+        function initSelector() {
+            const sel = document.getElementById('salaSelector');
+            for(let id in uuids) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.text = id.toUpperCase();
+                sel.add(opt);
             }
+            salaSelecionada = sel.value;
         }
 
-        function toggleAC(id) {
-            const isOn = state[id].ac === 'ligado';
-            const novoCmd = isOn ? 'desligar' : 'ligar';
-            state[id].ac = novoCmd === 'ligar' ? 'ligado' : 'desligado';
-            
-            const btn = document.getElementById(`btn_ac_${id}`);
-            btn.innerText = `❄️ AC: ${novoCmd === 'ligar' ? 'ON' : 'OFF'}`;
-            btn.classList.toggle('active-ac', novoCmd === 'ligar');
-            
-            const statEl = document.getElementById(`stat_${id}`);
-            const badgeEl = document.getElementById(`badge_${id}`);
-            if (statEl) {
-                statEl.innerText = novoCmd === 'ligar' ? 'LIGADO' : 'DESLIGADO';
-                statEl.style.color = novoCmd === 'ligar' ? 'var(--primary)' : 'var(--danger)';
-            }
-            if (badgeEl) {
-                badgeEl.innerText = novoCmd === 'ligar' ? 'LIGADO' : 'DESLIGADO';
-                badgeEl.style.background = novoCmd === 'ligar' ? 'var(--primary)' : 'var(--danger)';
-                badgeEl.style.boxShadow = novoCmd === 'ligar' ? '0 0 10px var(--primary)' : 'none';
-            }
-            document.getElementById(`card_${id}`).style.borderColor = novoCmd === 'ligar' ? 'var(--primary)' : 'var(--border)';
-
-            enviarComandoIndividualExt(id, { comando: novoCmd });
+        function selecionarSala() {
+            salaSelecionada = document.getElementById('salaSelector').value;
+            document.getElementById('ui_title').innerText = salaSelecionada.toUpperCase();
+            document.getElementById('ui_time').innerText = "Carregando...";
+            forcarAtualizacao();
         }
 
-        function toggleLuz(id) {
-            state[id].luz = state[id].luz === 'ligado' ? 'desligado' : 'ligado';
+        function forcarAtualizacao() {
+            if(!salaSelecionada) return;
+            const uuid = uuids[salaSelecionada];
             
-            // Feedback visual imediato
-            const btn = document.getElementById(`btn_luz_${id}`);
-            const isOn = state[id].luz === 'ligado';
-            btn.innerText = `💡 Luz: ${isOn ? 'ON' : 'OFF'}`;
-            btn.classList.toggle('active-luz', isOn);
-
-            enviarComandoIndividual(id, 'luz', isOn ? 'ligar' : 'desligar');
-        }
-
-        function connect() {
-            mqttClient = new Paho.MQTT.Client(mqttBroker, mqttPort, clientId);
-                mqttClient.onMessageArrived = (msg) => {
-                    const topic = msg.destinationName;
-                    const payload = msg.payloadString;
+            document.getElementById('pollStatus').innerText = "Consultando...";
+            
+            fetch(`${interscityUrl}/collector/resources/${uuid}/data/last`)
+                .then(r => r.ok ? r.json() : null)
+                .then(data => {
+                    document.getElementById('pollStatus').innerText = "Atualizado " + formatarData();
+                    if (!data || !data.resources || data.resources.length === 0) return;
                     
-                    // Descoberta dinâmica: extrai o ID da sala do tópico
-                    const topicParts = topic.split('/');
-                    const id = topicParts[1];
-                    
-                    if (id && !salasAtivas.has(id) && topic.includes('sensores')) {
-                        console.log("Nova sala descoberta:", id);
-                        createSalaCard(id);
-                    }
+                    const caps = data.resources[0].capabilities;
+                    if (!caps) return;
 
-                    if (topic.includes('comando')) log(topic, payload, 'in');
+                    const extract = (name) => caps[name] && caps[name].length > 0 ? caps[name][0].value : undefined;
 
-                    try {
-                        const data = JSON.parse(payload);
-                        if (!salasAtivas.has(id)) return;
+                    atualizarUI({
+                        temperatura: extract('temperatura'),
+                        umidade: extract('umidade'),
+                        luminosidade: extract('luminosidade'),
+                        status_ac: extract('status_ac'),
+                        status_luz: extract('status_luz'),
+                        setpoint_ac: extract('setpoint_ac'),
+                        presenca: extract('presenca'),
+                        modo_ac: extract('modo_ac')
+                    });
+                })
+                .catch(err => {
+                    document.getElementById('pollStatus').innerText = "Erro na consulta";
+                    console.error(err);
+                });
+        }
 
-                        if (topic.includes('sensores')) {
-                            console.log(`Dados recebidos para ${id}:`, data);
-                            
-                            if (data.temperatura) document.getElementById(`temp_${id}`).innerText = data.temperatura + "°C";
-                            if (data.umidade) document.getElementById(`umi_${id}`).innerText = data.umidade + "%";
-                            if (data.luminosidade) document.getElementById(`luz_${id}`).innerText = data.luminosidade + "lx";
-                            
-                            const acStat = data.status_ac || data.comando;
-                            if (acStat) {
-                                const isOn = (acStat === 'ligado' || acStat === 'ligar');
-                                
-                                // Atualiza o texto no grid de monitoramento
-                                const el = document.getElementById(`stat_${id}`);
-                                if (el) {
-                                    el.innerText = isOn ? 'LIGADO' : 'DESLIGADO';
-                                    el.style.color = isOn ? 'var(--accent)' : 'var(--danger)';
-                                }
-                                
-                                // Sincroniza o estado interno e botões
-                                state[id].ac = isOn ? 'ligado' : 'desligado';
-                                const btnAc = document.getElementById(`btn_ac_${id}`);
-                                if (btnAc) {
-                                    btnAc.innerText = `❄️ AC: ${isOn ? 'ON' : 'OFF'}`;
-                                    btnAc.classList.toggle('active-ac', isOn);
-                                }
-                            }
+        function atualizarUI(data) {
+            document.getElementById('ui_time').innerText = "Ultima att: " + formatarData();
+            
+            if (data.temperatura !== undefined) document.getElementById('ui_temp').innerText = Math.round(data.temperatura) + "°C";
+            if (data.umidade !== undefined) document.getElementById('ui_umi').innerText = Math.round(data.umidade) + "%";
+            if (data.luminosidade !== undefined) document.getElementById('ui_lux').innerText = data.luminosidade + "lx";
+            
+            if (data.status_ac !== undefined) {
+                const isOn = (data.status_ac === 'ligado');
+                currentState.ac = isOn ? 'ligado' : 'desligado';
+                const el = document.getElementById('ui_stat_ac');
+                el.innerText = isOn ? 'LIGADO' : 'DESLIGADO';
+                el.style.color = isOn ? 'var(--accent)' : 'var(--danger)';
+                
+                const btnAc = document.getElementById('btn_ac');
+                btnAc.innerText = `❄️ AC: ${isOn ? 'ON' : 'OFF'}`;
+                btnAc.classList.toggle('active-ac', isOn);
+            }
 
-                            if (data.status_luz) {
-                                const luzOn = data.status_luz === 'ligado';
-                                state[id].luz = data.status_luz;
-                                
-                                // Atualiza texto no grid
-                                const elLuz = document.getElementById(`stat_luz_${id}`);
-                                if (elLuz) {
-                                    elLuz.innerText = luzOn ? 'LIGADO' : 'DESLIGADO';
-                                    elLuz.style.color = luzOn ? 'var(--accent)' : 'var(--danger)';
-                                }
+            if (data.status_luz !== undefined) {
+                const luzOn = data.status_luz === 'ligado';
+                currentState.luz = data.status_luz;
+                const elLuz = document.getElementById('ui_stat_luz');
+                elLuz.innerText = luzOn ? 'LIGADO' : 'DESLIGADO';
+                elLuz.style.color = luzOn ? 'var(--accent)' : 'var(--danger)';
+                
+                const btnLuz = document.getElementById('btn_luz');
+                btnLuz.innerText = `💡 LUZ: ${luzOn ? 'ON' : 'OFF'}`;
+                btnLuz.classList.toggle('active-luz', luzOn);
+            }
 
-                                // Atualiza botão
-                                const btnLuz = document.getElementById(`btn_luz_${id}`);
-                                if (btnLuz) {
-                                    btnLuz.innerText = `💡 Luz: ${luzOn ? 'ON' : 'OFF'}`;
-                                    btnLuz.classList.toggle('active-luz', luzOn);
-                                }
-                            }
+            if (data.setpoint_ac !== undefined) {
+                document.getElementById('inp_set').value = data.setpoint_ac;
+                document.getElementById('lbl_set').innerText = data.setpoint_ac;
+            }
+            
+            if (data.presenca !== undefined) {
+                const isPres = (data.presenca == 'true' || data.presenca == 1 || data.presenca === true);
+                const elPres = document.getElementById('ui_pres');
+                elPres.innerText = isPres ? 'Sim' : 'Não';
+                elPres.style.color = isPres ? 'var(--accent)' : 'var(--text)';
+            }
+            
+            if (data.modo_ac !== undefined) {
+                currentState.modo_ac = data.modo_ac;
+                const isAtivo = data.modo_ac === 'ativo';
+                const badge = document.getElementById('ui_badge');
+                badge.innerText = isAtivo ? 'ATIVO' : 'DESATIVADO';
+                badge.style.background = isAtivo ? 'var(--primary)' : 'var(--danger)';
+                
+                const btn = document.getElementById('btn_modo');
+                btn.innerText = `🛡️ MODO DA SALA: ${isAtivo ? 'ATIVO (Auto)' : 'DESATIVADO'}`;
+                btn.classList.toggle('active-ac', isAtivo);
+                btn.style.borderColor = isAtivo ? 'var(--primary)' : 'var(--danger)';
+                btn.style.color = isAtivo ? 'var(--primary)' : 'var(--danger)';
+            }
+        }
 
-                            if (data.setpoint_ac) {
-                                document.getElementById(`set_${id}`).value = data.setpoint_ac;
-                                document.getElementById(`lbl_set_${id}`).innerText = data.setpoint_ac;
-                            }
-                            
-                            if (data.presenca !== undefined) {
-                                document.getElementById(`pres_${id}`).innerText = data.presenca ? 'Sim' : 'Não';
-                                document.getElementById(`pres_${id}`).style.color = data.presenca ? 'var(--accent)' : 'var(--text)';
-                                const chk = document.getElementById(`sim_pres_${id}`);
-                                if (chk && chk.checked !== data.presenca) {
-                                    chk.checked = data.presenca;
-                                }
-                            }
-                            
-                            if (data.modo_ac !== undefined) {
-                                state[id].modo_ac = data.modo_ac;
-                                const isAtivo = data.modo_ac === 'ativo';
-                                
-                                // Atualiza o Badge no cabeçalho (status da SALA)
-                                const badge = document.getElementById(`badge_${id}`);
-                                if (badge) {
-                                    badge.innerText = isAtivo ? 'ATIVO' : 'DESATIVADO';
-                                    badge.style.background = isAtivo ? 'var(--primary)' : 'var(--danger)';
-                                    badge.style.boxShadow = isAtivo ? '0 0 10px var(--primary)' : 'none';
-                                }
-                                document.getElementById(`card_${id}`).style.borderColor = isAtivo ? 'var(--primary)' : 'var(--border)';
-                                
-                                // Atualiza o botão de modo
-                                const btn = document.getElementById(`btn_modo_${id}`);
-                                if (btn) {
-                                    btn.innerText = `🛡️ MODO DA SALA: ${isAtivo ? 'ATIVO (Auto)' : 'DESATIVADO'}`;
-                                    btn.classList.toggle('active-ac', isAtivo);
-                                    btn.style.borderColor = isAtivo ? 'var(--primary)' : 'var(--danger)';
-                                    btn.style.color = isAtivo ? 'var(--primary)' : 'var(--danger)';
-                                }
-                            }
-                            
-                            document.getElementById(`time_${id}`).innerText = new Date().toLocaleTimeString();
-                        }
-                    } catch(e) {
-                        console.error("Erro ao processar payload:", e);
-                    }
-                };
+        function postToInterSCity(uuid, dataObj) {
+            return new Promise((resolve) => {
+                const ts = new Date().toISOString();
+                const payload = { data: {} };
+                for (const [k, v] of Object.entries(dataObj)) {
+                    payload.data['cmd_' + k] = [{timestamp: ts, value: v}];
+                }
 
-            mqttClient.onConnectionLost = (err) => {
-                document.getElementById('statusWrapper').classList.remove('connected');
-                document.getElementById('statusText').innerText = "Conexão perdida. Reconectando...";
-                setTimeout(connect, 3000);
-            };
-
-            mqttClient.connect({
-                onSuccess: () => {
-                    document.getElementById('statusWrapper').classList.add('connected');
-                    document.getElementById('statusText').innerText = "Conectado ao Broker: " + mqttBroker;
-                    mqttClient.subscribe("ac-iot/+/sensores");
-                    mqttClient.subscribe("ac-iot/+/comando");
-                    mqttClient.subscribe("ac-iot/all/comando");
-                },
-                onFailure: () => setTimeout(connect, 5000)
+                fetch(`${interscityUrl}/adaptor/resources/${uuid}/data`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).then(r => {
+                    resolve(r.ok);
+                }).catch(e => {
+                    console.error("Falha HTTP POST", e);
+                    resolve(false);
+                });
+                log(`POST ${uuid.substr(24)}`, JSON.stringify(dataObj), 'out');
             });
         }
 
-        function enviarComandoIndividual(id, field, value) {
-            if (!mqttClient || !mqttClient.isConnected()) return showToast("Erro: MQTT desconectado", "var(--danger)");
-
-            const payload = { id_sala: id };
-            payload[field] = value;
-
-            const topic = `ac-iot/${id}/comando`;
-            const msg = new Paho.MQTT.Message(JSON.stringify(payload));
-            msg.destinationName = topic;
-            mqttClient.send(msg);
-
-            log(topic, JSON.stringify(payload), 'out');
-            showToast(`Comando enviado para ${id.toUpperCase()}`);
+        function enviarComandoUi(field, value) {
+            const uuid = uuids[salaSelecionada];
+            if (!uuid) return;
+            const obj = {};
+            obj[field] = value;
+            postToInterSCity(uuid, obj).then(() => showToast(`Comando enviado para ${salaSelecionada.toUpperCase()}`));
+            // Optimistic update for slider labels
+            if(field === 'setpoint_ac') document.getElementById('lbl_set').innerText = value;
         }
 
-        function enviarComandoGlobal(field, value) {
-            if (!mqttClient || !mqttClient.isConnected()) return showToast("Erro: MQTT desconectado", "var(--danger)");
+        function toggleModo() {
+            const novoModo = currentState.modo_ac === 'ativo' ? 'desativado' : 'ativo';
+            const obj = { modo_ac: novoModo };
+            if (novoModo === 'desativado') obj.status_ac = 'desligado';
+            
+            const uuid = uuids[salaSelecionada];
+            postToInterSCity(uuid, obj).then(() => {
+                showToast(`Modo alterado para ${novoModo.toUpperCase()}`);
+                setTimeout(forcarAtualizacao, 1000);
+            });
+        }
 
-            const payload = {};
-            payload[field] = value;
+        function toggleAC() {
+            const novoCmd = currentState.ac === 'ligado' ? 'desligado' : 'ligado';
+            const uuid = uuids[salaSelecionada];
+            postToInterSCity(uuid, { status_ac: novoCmd }).then(() => {
+                showToast(`AC ${novoCmd.toUpperCase()}`);
+                setTimeout(forcarAtualizacao, 1000);
+            });
+        }
 
-            const topic = `ac-iot/all/comando`;
-            const msg = new Paho.MQTT.Message(JSON.stringify(payload));
-            msg.destinationName = topic;
-            mqttClient.send(msg);
+        function toggleLuz() {
+            const novoCmd = currentState.luz === 'ligado' ? 'desligado' : 'ligado';
+            const uuid = uuids[salaSelecionada];
+            postToInterSCity(uuid, { status_luz: novoCmd }).then(() => {
+                showToast(`Luz ${novoCmd.toUpperCase()}`);
+                setTimeout(forcarAtualizacao, 1000);
+            });
+        }
 
-            log(topic, JSON.stringify(payload), 'out');
-            showToast(`Comando GLOBAL enviado: ${field} -> ${value}`);
+        // Fila de execução para não derrubar o servidor em comandos globais
+        async function enviarComandoGlobal(payloadObj) {
+            showToast("Enviando comando para 200 salas... Aguarde.");
+            const uuidList = Object.values(uuids);
+            
+            document.getElementById('pollStatus').innerText = "Executando Lote (0/200)...";
+            
+            for (let i = 0; i < uuidList.length; i++) {
+                await postToInterSCity(uuidList[i], payloadObj);
+                if (i % 10 === 0) {
+                    document.getElementById('pollStatus').innerText = `Executando Lote (${i}/200)...`;
+                }
+                // Rate limit: ~20ms de delay entre requisições (50 req/sec)
+                await new Promise(r => setTimeout(r, 20)); 
+            }
+            
+            document.getElementById('pollStatus').innerText = "Lote Concluído.";
+            showToast(`Comando GLOBAL finalizado!`, 'var(--primary)');
+            setTimeout(forcarAtualizacao, 1000);
         }
 
         function log(topic, msg, type) {
             const logEl = document.getElementById('debugLog');
             const entry = document.createElement('div');
             const color = type === 'in' ? 'var(--accent)' : 'var(--primary)';
-            entry.innerHTML = `<span style="color:var(--text-dim)">${new Date().toLocaleTimeString()}</span> <b style="color:${color}">${type === 'in' ? '↓' : '↑'}</b> <span style="color:var(--text-dim)">${topic}:</span> ${msg}`;
+            entry.innerHTML = `<span style="color:var(--text-dim)">${new Date().toLocaleTimeString()}</span> <b style="color:${color}">${type === 'in' ? '↓' : '↑'}</b> <span style="color:var(--text-dim)">[${topic}]</span> ${msg}`;
             logEl.prepend(entry);
-            if (logEl.children.length > 30) logEl.lastChild.remove();
-        }
-
-        function enviarComandoIndividualExt(id, payloadObj) {
-            if (!mqttClient || !mqttClient.isConnected()) return showToast("Erro: MQTT desconectado", "var(--danger)");
-            const topic = `ac-iot/${id}/comando`;
-            const msg = new Paho.MQTT.Message(JSON.stringify(payloadObj));
-            msg.destinationName = topic;
-            mqttClient.send(msg);
-            log(topic, JSON.stringify(payloadObj), 'out');
-            showToast(`Comando avançado enviado para ${id.toUpperCase()}`);
-        }
-
-        function enviarComandoGlobalExt(payloadObj) {
-            if (!mqttClient || !mqttClient.isConnected()) return showToast("Erro: MQTT desconectado", "var(--danger)");
-            const topic = `ac-iot/all/comando`;
-            const msg = new Paho.MQTT.Message(JSON.stringify(payloadObj));
-            msg.destinationName = topic;
-            mqttClient.send(msg);
-            log(topic, JSON.stringify(payloadObj), 'out');
-            showToast(`Comando GLOBAL avançado enviado!`);
+            if (logEl.children.length > 50) logEl.lastChild.remove();
         }
         
         function showToast(msg, color) {
@@ -759,16 +676,15 @@
             setTimeout(() => t.classList.remove('show'), 3000);
         }
 
-        function enviarComandoSimulador(field, value) {
-            const target = document.getElementById('sim_target').value;
-            if (target === 'all') {
-                enviarComandoGlobal(field, value);
-            } else {
-                enviarComandoIndividual(target, field, value);
-            }
-        }
-
-        window.onload = () => { connect(); };
+        window.onload = () => {
+            initSelector();
+            document.getElementById('statusWrapper').classList.add('connected');
+            document.getElementById('statusText').innerText = "Pronto. Conectado ao InterSCity da UFMA.";
+            selecionarSala();
+            
+            // Poll apenas da sala selecionada a cada 5 segundos
+            setInterval(forcarAtualizacao, 5000);
+        };
     </script>
 </body>
 </html>

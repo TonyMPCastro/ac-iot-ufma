@@ -1,0 +1,45 @@
+
+Aqui está o passo a passo exato de como rodar isso usando o **Docker Desktop** na sua máquina Windows:
+
+### 1. Habilitar o Kubernetes no Docker Desktop
+Se você ainda não ativou:
+1. Abra o Docker Desktop.
+2. Clique na **Engrenagem (Configurações)** no canto superior direito.
+3. Vá na aba **Kubernetes**.
+4. Marque a caixinha **Enable Kubernetes** e clique em **Apply & Restart**.
+ *(Pode demorar alguns minutos para o Docker baixar os arquivos internos do cluster).*
+
+### 2. Aplicar a Arquitetura (Os YAMLs)
+Com o Kubernetes ativo e rodando (o ícone verdinho do K8s no rodapé do Docker Desktop), abra o seu **CMD** e aplique todos os arquivos que eu acabei de criar com um único comando:
+
+```cmd
+kubectl apply -f c:\Projetos\ac-iot-ufma\k8s
+```
+Isso vai criar o Disco Persistente (PVC), a Rede (Service) e os Contêineres (Deployments) do Node-RED e do Simulador C++.
+
+*(Aviso: Se você ainda tem o `docker-compose up` rodando, é bom parar ele primeiro com `docker-compose down` para as portas não entrarem em conflito).*
+
+### 3. O Detalhe do Node-RED (Copiando seus Fluxos)
+No Docker Compose, você atrelava a pasta do seu Windows direto no Node-RED. No Kubernetes real (PVC), o "HD" nasce em branco por questões de segurança corporativa. Sendo assim, o Node-RED vai iniciar sem os fluxos que programamos. 
+
+Para resolver isso, vamos injetar o seu arquivo de fluxos da sua máquina para dentro do Pod do Kubernetes:
+
+1. Liste os pods para pegar o nome exato do Node-RED gerado pelo Kubernetes:
+```cmd
+kubectl get pods
+```
+*(Você verá algo como `nodered-7b89f8...`)*
+
+2. Copie o arquivo do seu Windows para dentro do "HD" do Pod usando esse comando (substitua o `<NOME_DO_POD>` pelo nome que apareceu no passo anterior):
+```cmd
+kubectl cp c:\Projetos\ac-iot-ufma\docker\nodered\data\flows.json <NOME_DO_POD>:/data/flows.json
+```
+
+3. Dê um "peteleco" no pod para ele reiniciar e carregar o arquivo que você injetou:
+```cmd
+kubectl delete pod <NOME_DO_POD>
+```
+*(Fique tranquilo, como é um Deployment, no segundo em que você deletar o pod, o K8s cria outro novo no lugar instantaneamente, e o disco PVC continuará lá, agora com seus fluxos!)*
+
+### Pronto! Tudo está rodando no Kubernetes!
+Você pode acessar o Node-RED normalmente no navegador digitando `http://localhost:31880` (no Kubernetes eu mapeei para a porta **31880** por padrão em vez da 1880, para simular a porta NodePort corporativa). O seu painel Web em HTML continua sendo acessado com dois cliques no arquivo!
