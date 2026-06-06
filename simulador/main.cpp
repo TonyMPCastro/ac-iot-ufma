@@ -236,16 +236,21 @@ static void poll_commands_for_room(RoomConfig& sala) {
         json caps = res_obj["capabilities"];
         std::string latest_timestamp = "";
         
-        // Função auxiliar para extrair comando
         auto extrair_cmd = [&](const std::string& cap_name, auto& target_var, auto parser) {
             if (caps.contains(cap_name) && caps[cap_name].is_array() && !caps[cap_name].empty()) {
                 json leitura = caps[cap_name][0];
-                std::string ts = leitura["timestamp"].get<std::string>();
-                if (ts > sala.last_cmd_timestamp) {
+                std::string ts = "";
+                if (leitura.contains("date") && leitura["date"].is_string()) {
+                    ts = leitura["date"].get<std::string>();
+                } else if (leitura.contains("timestamp") && leitura["timestamp"].is_string()) {
+                    ts = leitura["timestamp"].get<std::string>();
+                }
+                
+                if (!ts.empty() && ts > sala.last_cmd_timestamp) {
                     try {
                         target_var = parser(leitura["value"]);
                         if (ts > latest_timestamp) latest_timestamp = ts;
-                        std::cout << "[COMANDO] " << sala.id << " -> " << cap_name << " atualizado.\n";
+                        std::cout << "[COMANDO] " << sala.id << " -> " << cap_name << " atualizado (" << ts << ").\n";
                     } catch (...) {}
                 }
             }
