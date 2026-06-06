@@ -19,7 +19,8 @@ services:
       context: ./simulador
     container_name: ac_iot_simulador
     environment:
-      - PUBLISH_INTERVAL=300
+      - POLL_INTERVAL=3
+      - PUBLISH_INTERVAL=10
       - TOTAL_SALAS=1
       - INTERSCITY_URL=https://cidadesinteligentes.lsdi.ufma.br/interscity_lh
     restart: unless-stopped

@@ -445,7 +445,7 @@
 
     <script>
         const interscityUrl = "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh";
-        const totalSalas = 1;
+        const totalSalas = 10;
         
         // Gerar 200 UUIDs estáticos seguindo o padrão que fizemos no C++
         const uuids = {};
@@ -623,18 +623,22 @@
         function toggleAC() {
             const novoCmd = currentState.ac === 'ligado' ? 'desligado' : 'ligado';
             const uuid = uuids[salaSelecionada];
+            currentState.ac = novoCmd; // Atualização otimista
+            atualizarUI(currentState);
+            
             postToInterSCity(uuid, { status_ac: novoCmd }).then(() => {
                 showToast(`AC ${novoCmd.toUpperCase()}`);
-                setTimeout(forcarAtualizacao, 1000);
             });
         }
 
         function toggleLuz() {
             const novoCmd = currentState.luz === 'ligado' ? 'desligado' : 'ligado';
             const uuid = uuids[salaSelecionada];
+            currentState.luz = novoCmd; // Atualização otimista
+            atualizarUI(currentState);
+            
             postToInterSCity(uuid, { status_luz: novoCmd }).then(() => {
                 showToast(`Luz ${novoCmd.toUpperCase()}`);
-                setTimeout(forcarAtualizacao, 1000);
             });
         }
 

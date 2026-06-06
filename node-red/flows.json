@@ -2,9 +2,9 @@
     {
         "id": "tab_auto",
         "type": "tab",
-        "label": "Automa\u00e7\u00e3o AC",
+        "label": "Automação AC",
         "disabled": false,
-        "info": "L\u00f3gica autom\u00e1tica de controle do AC."
+        "info": "Lógica automática de controle do AC."
     },
     {
         "id": "tab_global",
@@ -88,8 +88,8 @@
         "id": "func_auto",
         "type": "function",
         "z": "tab_auto",
-        "name": "Automa\u00e7\u00e3o AC (Temp + Presen\u00e7a + Timer 1min)",
-        "func": "var payload = msg.payload;\nif (typeof payload === 'string') {\n    try { payload = JSON.parse(payload); }\n    catch(e) { return null; }\n}\nif (!payload) return null;\nif (payload.hasOwnProperty('comando')) return null;\nif (payload.modo_ac === 'desativado') return null;\n\nvar id_sala = payload.id_sala;\nif (!id_sala && msg.topic) {\n    var p = msg.topic.split('/');\n    if (p.length >= 2) id_sala = p[1];\n}\nif (!id_sala || id_sala === 'all') return null;\n\nvar temp = Number(payload.temperatura);\nif (!Number.isFinite(temp)) return null;\n\nvar set = Number.isFinite(Number(payload.setpoint_ac)) ? Number(payload.setpoint_ac) : 22;\nvar m = 2;\nvar stAC = payload.status_ac;\nvar pres = payload.presenca === true;\nvar now = Date.now();\n\nvar ctx = context.get('salas') || {};\nif (!ctx[id_sala]) ctx[id_sala] = { lastPres: now, done: false };\nvar s = ctx[id_sala];\nif (pres) { s.lastPres = now; s.done = false; }\ncontext.set('salas', ctx);\n\nvar acao = null, razao = '';\n\nif (pres) {\n    if (stAC !== 'ligado' && temp > (set + m)) { acao = 'ligar'; razao = 'presenca_calor'; }\n    else if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'presenca_frio'; }\n} else {\n    if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'sem_presenca_frio'; }\n    var mins = (now - s.lastPres) / 60000;\n    if (mins >= 1 && stAC === 'ligado' && !s.done) {\n        acao = 'desligar'; razao = 'ausencia_1min';\n        s.done = true; context.set('salas', ctx);\n        node.warn(id_sala + ': AC desligado por aus\u00eancia (1min)');\n    }\n}\n\nif (!acao) return null;\nreturn { topic: 'ac-iot/' + id_sala + '/comando', payload: { id_sala: id_sala, comando: acao, razao: 'automacao_' + razao } };",
+        "name": "Automação AC (Temp + Presença + Timer 1min)",
+        "func": "var payload = msg.payload;\nif (typeof payload === 'string') {\n    try { payload = JSON.parse(payload); }\n    catch(e) { return null; }\n}\nif (!payload) return null;\nif (payload.hasOwnProperty('comando')) return null;\nif (payload.modo_ac === 'desativado') return null;\n\nvar id_sala = payload.id_sala;\nif (!id_sala && msg.topic) {\n    var p = msg.topic.split('/');\n    if (p.length >= 2) id_sala = p[1];\n}\nif (!id_sala || id_sala === 'all') return null;\n\nvar temp = Number(payload.temperatura);\nif (!Number.isFinite(temp)) return null;\n\nvar set = Number.isFinite(Number(payload.setpoint_ac)) ? Number(payload.setpoint_ac) : 22;\nvar m = 2;\nvar stAC = payload.status_ac;\nvar pres = payload.presenca === true;\nvar now = Date.now();\n\nvar ctx = context.get('salas') || {};\nif (!ctx[id_sala]) ctx[id_sala] = { lastPres: now, done: false };\nvar s = ctx[id_sala];\nif (pres) { s.lastPres = now; s.done = false; }\ncontext.set('salas', ctx);\n\nvar acao = null, razao = '';\n\nif (pres) {\n    if (stAC !== 'ligado' && temp > (set + m)) { acao = 'ligar'; razao = 'presenca_calor'; }\n    else if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'presenca_frio'; }\n} else {\n    if (stAC === 'ligado' && temp < (set - m)) { acao = 'desligar'; razao = 'sem_presenca_frio'; }\n    var mins = (now - s.lastPres) / 60000;\n    if (mins >= 1 && stAC === 'ligado' && !s.done) {\n        acao = 'desligar'; razao = 'ausencia_1min';\n        s.done = true; context.set('salas', ctx);\n        node.warn(id_sala + ': AC desligado por ausência (1min)');\n    }\n}\n\nif (!acao) return null;\n// Converted for REST\nlet num = id_sala.replace(/\\D/g, '');\nlet uuid = '00000000-0000-0000-0000-' + num.padStart(12, '0');\nlet date = new Date().toISOString();\nmsg.url = 'https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/adaptor/resources/' + uuid + '/data';\nmsg.method = 'POST';\nmsg.headers = { 'Content-Type': 'application/json' };\nlet cmd = acao === 'ligar' ? 'ligado' : 'desligado';\nmsg.payload = { data: { cmd_status_ac: [{ value: cmd, date: date }] } };\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -107,21 +107,23 @@
     },
     {
         "id": "mqtt_out_auto",
-        "type": "mqtt out",
+        "type": "http request",
         "z": "tab_auto",
         "name": "Enviar Comando",
-        "topic": "",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "mqtt_broker_docker",
         "x": 810,
         "y": 100,
-        "wires": []
+        "wires": [],
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": []
     },
     {
         "id": "dbg_sensor",
@@ -142,7 +144,7 @@
         "id": "dbg_auto",
         "type": "debug",
         "z": "tab_auto",
-        "name": "Debug Automa\u00e7\u00e3o",
+        "name": "Debug Automação",
         "active": true,
         "tosidebar": true,
         "console": false,
@@ -155,27 +157,29 @@
     },
     {
         "id": "mqtt_out_global",
-        "type": "mqtt out",
+        "type": "http request",
         "z": "tab_global",
         "name": "Publicar Global",
-        "topic": "",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "mqtt_broker_docker",
         "x": 620,
         "y": 300,
-        "wires": []
+        "wires": [],
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": []
     },
     {
         "id": "g_ativar",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83d\udee1\ufe0f Ativar Todas",
+        "name": "🛡️ Ativar Todas",
         "props": [
             {
                 "p": "payload"
@@ -204,7 +208,7 @@
         "id": "g_desativar",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83d\udee1\ufe0f Desativar Todas",
+        "name": "🛡️ Desativar Todas",
         "props": [
             {
                 "p": "payload"
@@ -233,7 +237,7 @@
         "id": "g_ac_on",
         "type": "inject",
         "z": "tab_global",
-        "name": "\u2744\ufe0f Ligar Todos ACs",
+        "name": "❄️ Ligar Todos ACs",
         "props": [
             {
                 "p": "payload"
@@ -262,7 +266,7 @@
         "id": "g_ac_off",
         "type": "inject",
         "z": "tab_global",
-        "name": "\u2744\ufe0f Desligar Todos ACs",
+        "name": "❄️ Desligar Todos ACs",
         "props": [
             {
                 "p": "payload"
@@ -291,7 +295,7 @@
         "id": "g_luz_on",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83d\udca1 Ligar Todas Luzes",
+        "name": "💡 Ligar Todas Luzes",
         "props": [
             {
                 "p": "payload"
@@ -320,7 +324,7 @@
         "id": "g_luz_off",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83d\udca1 Desligar Todas Luzes",
+        "name": "💡 Desligar Todas Luzes",
         "props": [
             {
                 "p": "payload"
@@ -349,7 +353,7 @@
         "id": "g_set20",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83c\udf21\ufe0f Setpoint 20\u00b0C",
+        "name": "🌡️ Setpoint 20°C",
         "props": [
             {
                 "p": "payload"
@@ -378,7 +382,7 @@
         "id": "g_set22",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83c\udf21\ufe0f Setpoint 22\u00b0C",
+        "name": "🌡️ Setpoint 22°C",
         "props": [
             {
                 "p": "payload"
@@ -407,7 +411,7 @@
         "id": "g_set25",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83c\udf21\ufe0f Setpoint 25\u00b0C",
+        "name": "🌡️ Setpoint 25°C",
         "props": [
             {
                 "p": "payload"
@@ -436,7 +440,7 @@
         "id": "g_pres_on",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83d\udc64 Presen\u00e7a ON (todas)",
+        "name": "👤 Presença ON (todas)",
         "props": [
             {
                 "p": "payload"
@@ -465,7 +469,7 @@
         "id": "g_pres_off",
         "type": "inject",
         "z": "tab_global",
-        "name": "\ud83d\udc64 Presen\u00e7a OFF (todas)",
+        "name": "👤 Presença OFF (todas)",
         "props": [
             {
                 "p": "payload"
@@ -492,27 +496,29 @@
     },
     {
         "id": "out_s01",
-        "type": "mqtt out",
+        "type": "http request",
         "z": "tab_sala01",
         "name": "Comando Sala01",
-        "topic": "",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "mqtt_broker_docker",
         "x": 600,
         "y": 300,
-        "wires": []
+        "wires": [],
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": []
     },
     {
         "id": "s01_ativar",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83d\udee1\ufe0f Ativar Sala",
+        "name": "🛡️ Ativar Sala",
         "props": [
             {
                 "p": "payload"
@@ -541,7 +547,7 @@
         "id": "s01_desativar",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83d\udee1\ufe0f Desativar Sala",
+        "name": "🛡️ Desativar Sala",
         "props": [
             {
                 "p": "payload"
@@ -570,7 +576,7 @@
         "id": "s01_ac_on",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\u2744\ufe0f Ligar AC",
+        "name": "❄️ Ligar AC",
         "props": [
             {
                 "p": "payload"
@@ -599,7 +605,7 @@
         "id": "s01_ac_off",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\u2744\ufe0f Desligar AC",
+        "name": "❄️ Desligar AC",
         "props": [
             {
                 "p": "payload"
@@ -628,7 +634,7 @@
         "id": "s01_luz_on",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83d\udca1 Ligar Luz",
+        "name": "💡 Ligar Luz",
         "props": [
             {
                 "p": "payload"
@@ -657,7 +663,7 @@
         "id": "s01_luz_off",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83d\udca1 Desligar Luz",
+        "name": "💡 Desligar Luz",
         "props": [
             {
                 "p": "payload"
@@ -686,7 +692,7 @@
         "id": "s01_set20",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83c\udf21\ufe0f Set 20\u00b0C",
+        "name": "🌡️ Set 20°C",
         "props": [
             {
                 "p": "payload"
@@ -715,7 +721,7 @@
         "id": "s01_set22",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83c\udf21\ufe0f Set 22\u00b0C",
+        "name": "🌡️ Set 22°C",
         "props": [
             {
                 "p": "payload"
@@ -744,7 +750,7 @@
         "id": "s01_set25",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83c\udf21\ufe0f Set 25\u00b0C",
+        "name": "🌡️ Set 25°C",
         "props": [
             {
                 "p": "payload"
@@ -773,7 +779,7 @@
         "id": "s01_pres_on",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83d\udc64 Presen\u00e7a ON",
+        "name": "👤 Presença ON",
         "props": [
             {
                 "p": "payload"
@@ -802,7 +808,7 @@
         "id": "s01_pres_off",
         "type": "inject",
         "z": "tab_sala01",
-        "name": "\ud83d\udc64 Presen\u00e7a OFF",
+        "name": "👤 Presença OFF",
         "props": [
             {
                 "p": "payload"
@@ -829,27 +835,29 @@
     },
     {
         "id": "out_s02",
-        "type": "mqtt out",
+        "type": "http request",
         "z": "tab_sala02",
         "name": "Comando Sala02",
-        "topic": "",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "mqtt_broker_docker",
         "x": 600,
         "y": 300,
-        "wires": []
+        "wires": [],
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": []
     },
     {
         "id": "s02_ativar",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83d\udee1\ufe0f Ativar Sala",
+        "name": "🛡️ Ativar Sala",
         "props": [
             {
                 "p": "payload"
@@ -878,7 +886,7 @@
         "id": "s02_desativar",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83d\udee1\ufe0f Desativar Sala",
+        "name": "🛡️ Desativar Sala",
         "props": [
             {
                 "p": "payload"
@@ -907,7 +915,7 @@
         "id": "s02_ac_on",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\u2744\ufe0f Ligar AC",
+        "name": "❄️ Ligar AC",
         "props": [
             {
                 "p": "payload"
@@ -936,7 +944,7 @@
         "id": "s02_ac_off",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\u2744\ufe0f Desligar AC",
+        "name": "❄️ Desligar AC",
         "props": [
             {
                 "p": "payload"
@@ -965,7 +973,7 @@
         "id": "s02_luz_on",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83d\udca1 Ligar Luz",
+        "name": "💡 Ligar Luz",
         "props": [
             {
                 "p": "payload"
@@ -994,7 +1002,7 @@
         "id": "s02_luz_off",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83d\udca1 Desligar Luz",
+        "name": "💡 Desligar Luz",
         "props": [
             {
                 "p": "payload"
@@ -1023,7 +1031,7 @@
         "id": "s02_set20",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83c\udf21\ufe0f Set 20\u00b0C",
+        "name": "🌡️ Set 20°C",
         "props": [
             {
                 "p": "payload"
@@ -1052,7 +1060,7 @@
         "id": "s02_set22",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83c\udf21\ufe0f Set 22\u00b0C",
+        "name": "🌡️ Set 22°C",
         "props": [
             {
                 "p": "payload"
@@ -1081,7 +1089,7 @@
         "id": "s02_set25",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83c\udf21\ufe0f Set 25\u00b0C",
+        "name": "🌡️ Set 25°C",
         "props": [
             {
                 "p": "payload"
@@ -1110,7 +1118,7 @@
         "id": "s02_pres_on",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83d\udc64 Presen\u00e7a ON",
+        "name": "👤 Presença ON",
         "props": [
             {
                 "p": "payload"
@@ -1139,7 +1147,7 @@
         "id": "s02_pres_off",
         "type": "inject",
         "z": "tab_sala02",
-        "name": "\ud83d\udc64 Presen\u00e7a OFF",
+        "name": "👤 Presença OFF",
         "props": [
             {
                 "p": "payload"
@@ -1166,27 +1174,29 @@
     },
     {
         "id": "out_s03",
-        "type": "mqtt out",
+        "type": "http request",
         "z": "tab_sala03",
         "name": "Comando Sala03",
-        "topic": "",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "mqtt_broker_docker",
         "x": 600,
         "y": 300,
-        "wires": []
+        "wires": [],
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": []
     },
     {
         "id": "s03_ativar",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83d\udee1\ufe0f Ativar Sala",
+        "name": "🛡️ Ativar Sala",
         "props": [
             {
                 "p": "payload"
@@ -1215,7 +1225,7 @@
         "id": "s03_desativar",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83d\udee1\ufe0f Desativar Sala",
+        "name": "🛡️ Desativar Sala",
         "props": [
             {
                 "p": "payload"
@@ -1244,7 +1254,7 @@
         "id": "s03_ac_on",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\u2744\ufe0f Ligar AC",
+        "name": "❄️ Ligar AC",
         "props": [
             {
                 "p": "payload"
@@ -1273,7 +1283,7 @@
         "id": "s03_ac_off",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\u2744\ufe0f Desligar AC",
+        "name": "❄️ Desligar AC",
         "props": [
             {
                 "p": "payload"
@@ -1302,7 +1312,7 @@
         "id": "s03_luz_on",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83d\udca1 Ligar Luz",
+        "name": "💡 Ligar Luz",
         "props": [
             {
                 "p": "payload"
@@ -1331,7 +1341,7 @@
         "id": "s03_luz_off",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83d\udca1 Desligar Luz",
+        "name": "💡 Desligar Luz",
         "props": [
             {
                 "p": "payload"
@@ -1360,7 +1370,7 @@
         "id": "s03_set20",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83c\udf21\ufe0f Set 20\u00b0C",
+        "name": "🌡️ Set 20°C",
         "props": [
             {
                 "p": "payload"
@@ -1389,7 +1399,7 @@
         "id": "s03_set22",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83c\udf21\ufe0f Set 22\u00b0C",
+        "name": "🌡️ Set 22°C",
         "props": [
             {
                 "p": "payload"
@@ -1418,7 +1428,7 @@
         "id": "s03_set25",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83c\udf21\ufe0f Set 25\u00b0C",
+        "name": "🌡️ Set 25°C",
         "props": [
             {
                 "p": "payload"
@@ -1447,7 +1457,7 @@
         "id": "s03_pres_on",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83d\udc64 Presen\u00e7a ON",
+        "name": "👤 Presença ON",
         "props": [
             {
                 "p": "payload"
@@ -1476,7 +1486,7 @@
         "id": "s03_pres_off",
         "type": "inject",
         "z": "tab_sala03",
-        "name": "\ud83d\udc64 Presen\u00e7a OFF",
+        "name": "👤 Presença OFF",
         "props": [
             {
                 "p": "payload"
@@ -1551,7 +1561,7 @@
         "method": "GET",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://interscity-resource-cataloguer:3000/capabilities",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/catalog/capabilities",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
@@ -1617,7 +1627,7 @@
         "method": "GET",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://interscity-resource-cataloguer:3000/resources",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/catalog/resources",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
@@ -1693,7 +1703,7 @@
         "method": "GET",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://interscity-data-collector:3000/resources/00000000-0000-4000-8000-000000000101/data/last",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/collector/resources/00000000-0000-0000-0000-000000000001/data/last",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
@@ -1759,7 +1769,7 @@
         "method": "GET",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://interscity-data-collector:3000/resources/00000000-0000-4000-8000-000000000102/data/last",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/collector/resources/00000000-0000-0000-0000-000000000002/data/last",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
@@ -1825,7 +1835,7 @@
         "method": "GET",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://interscity-data-collector:3000/resources/00000000-0000-4000-8000-000000000103/data/last",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/collector/resources/00000000-0000-0000-0000-000000000003/data/last",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
@@ -1966,21 +1976,23 @@
     },
     {
         "id": "ic_mqtt_out_test",
-        "type": "mqtt out",
+        "type": "http request",
         "z": "ic_tab",
         "name": "Publicar teste MQTT",
-        "topic": "",
-        "qos": "0",
-        "retain": "false",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "mqtt_broker_docker",
         "x": 730,
         "y": 540,
-        "wires": []
+        "wires": [],
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": []
     },
     {
         "id": "ic_dbg_test_payload",
@@ -2089,7 +2101,7 @@
         "type": "function",
         "z": "ic_tab",
         "name": "Montar POST InterSCity direto",
-        "func": "const rooms = {\n    sala01: { uuid: '00000000-0000-4000-8000-000000000101', temperatura: 34.2, umidade: 61, luminosidade: 901, setpoint_ac: 20 },\n    sala02: { uuid: '00000000-0000-4000-8000-000000000102', temperatura: 29.9, umidade: 57, luminosidade: 650, setpoint_ac: 22 },\n    sala03: { uuid: '00000000-0000-4000-8000-000000000103', temperatura: 25.5, umidade: 53, luminosidade: 420, setpoint_ac: 23 }\n};\nconst sala = msg.sala || 'sala01';\nconst room = rooms[sala] || rooms.sala01;\nconst date = new Date().toISOString();\nmsg.method = 'POST';\nmsg.url = `http://interscity-resource-adaptor:3000/resources/${room.uuid}/data`;\nmsg.headers = { 'Content-Type': 'application/json' };\nmsg.payload = {\n    data: {\n        temperatura: [{ value: room.temperatura, date }],\n        umidade: [{ value: room.umidade, date }],\n        luminosidade: [{ value: room.luminosidade, date }],\n        presenca: [{ value: true, date }],\n        status_ac: [{ value: 'ligado', date }],\n        setpoint_ac: [{ value: room.setpoint_ac, date }],\n        status_luz: [{ value: 'ligado', date }],\n        modo_ac: [{ value: 'ativo', date }]\n    }\n};\nreturn msg;",
+        "func": "const rooms = {\n    sala01: { uuid: '00000000-0000-0000-0000-000000000001', temperatura: 34.2, umidade: 61, luminosidade: 901, setpoint_ac: 20 },\n    sala02: { uuid: '00000000-0000-0000-0000-000000000002', temperatura: 29.9, umidade: 57, luminosidade: 650, setpoint_ac: 22 },\n    sala03: { uuid: '00000000-0000-0000-0000-000000000003', temperatura: 25.5, umidade: 53, luminosidade: 420, setpoint_ac: 23 }\n};\nconst sala = msg.sala || 'sala01';\nconst room = rooms[sala] || rooms.sala01;\nconst date = new Date().toISOString();\nmsg.method = 'POST';\nmsg.url = `https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/adaptor/resources/${room.uuid}/data`;\nmsg.headers = { 'Content-Type': 'application/json' };\nmsg.payload = {\n    data: {\n        temperatura: [{ value: room.temperatura, date }],\n        umidade: [{ value: room.umidade, date }],\n        luminosidade: [{ value: room.luminosidade, date }],\n        presenca: [{ value: true, date }],\n        status_ac: [{ value: 'ligado', date }],\n        setpoint_ac: [{ value: room.setpoint_ac, date }],\n        status_luz: [{ value: 'ligado', date }],\n        modo_ac: [{ value: 'ativo', date }]\n    }\n};\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
@@ -2188,7 +2200,7 @@
         "method": "GET",
         "ret": "txt",
         "paytoqs": "ignore",
-        "url": "http://interscity-resource-cataloguer:3000/",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/catalog/",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
@@ -2254,7 +2266,7 @@
         "method": "GET",
         "ret": "txt",
         "paytoqs": "ignore",
-        "url": "http://interscity-data-collector:3000/",
+        "url": "https://cidadesinteligentes.lsdi.ufma.br/interscity_lh/collector/",
         "tls": "tls_no_verify",
         "persist": false,
         "proxy": "",
