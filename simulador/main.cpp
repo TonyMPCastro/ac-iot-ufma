@@ -118,7 +118,9 @@ static std::string send_http_request(const std::string& url, const std::string& 
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &code);
         response = std::string(chunk.memory, chunk.size);
         if (code >= 300) {
-            std::cerr << "[ERRO HTTP " << code << "] Resposta: " << response << "\n";
+            if (response.find("already been taken") == std::string::npos) {
+                std::cerr << "[ERRO HTTP " << code << "] Resposta: " << response << "\n";
+            }
             response = ""; // Tratar como erro
         }
     }
@@ -160,7 +162,7 @@ static void registrar_capabilities() {
         };
         std::cout << "Registrando capability: " << cap.first << "\n";
         send_http_request(url, "POST", payload.dump());
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20000));
     }
 }
 
@@ -180,7 +182,7 @@ static void registrar_resources() {
         };
         std::cout << "Registrando resource: " << sala.id << " (UUID: " << sala.uuid << ")\n";
         send_http_request(url, "POST", payload.dump());
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20000));
     }
 }
 
@@ -307,7 +309,7 @@ static void process_all_rooms() {
         send_http_request(url, "POST", payload.dump());
         
         // Rate limiting de 50ms (20 req/s máximo) para não derrubar o Kong
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::this_thread::sleep_for(std::chrono::milliseconds(20000));
     }
 }
 
