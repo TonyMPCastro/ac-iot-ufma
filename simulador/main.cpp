@@ -315,8 +315,11 @@ int main() {
         INTERSCITY_URL = custom_url;
     }
 
+    int TOTAL_SALAS = std::atoi(getenv_or("TOTAL_SALAS", "10").c_str());
+    if (TOTAL_SALAS <= 0) TOTAL_SALAS = 10;
+
     SALAS.clear();
-    for (int i = 1; i <= 10; ++i) {
+    for (int i = 1; i <= TOTAL_SALAS; ++i) {
         char id_buf[16];
         snprintf(id_buf, sizeof(id_buf), "sala%03d", i);
         char uuid_buf[64];
