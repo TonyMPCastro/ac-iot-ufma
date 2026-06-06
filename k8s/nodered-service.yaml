@@ -3,10 +3,9 @@ kind: Service
 metadata:
   name: nodered-svc
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: nodered
   ports:
     - port: 1880
       targetPort: 1880
-      nodePort: 31880
